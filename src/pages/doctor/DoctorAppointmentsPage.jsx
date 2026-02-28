@@ -1,44 +1,78 @@
-import { useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
-import DataTable from '../../components/ui/DataTable'
-import PageHeader from '../../components/ui/PageHeader'
-import StatusBadge from '../../components/ui/StatusBadge'
-import useSimulatedLoading from '../../hooks/useSimulatedLoading'
-import { CURRENT_SESSION, appointments, patients } from '../../data/mockData'
-import { formatDate } from '../../utils/formatters'
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import DataTable from "../../components/ui/DataTable";
+import LoadingSpinner from "../../components/ui/LoadingSpinner";
+import PageHeader from "../../components/ui/PageHeader";
+import StatusBadge from "../../components/ui/StatusBadge";
+import { getLoggedInUser } from "../../services/authService";
+import { getAppointmentsByDoctor } from "../../services/appointmentService";
+import { getAllPatients } from "../../services/patientService";
+import { formatDate } from "../../utils/formatters";
 
 function DoctorAppointmentsPage() {
-  const navigate = useNavigate()
-  const loading = useSimulatedLoading(350)
-  const doctorId = CURRENT_SESSION.doctorId
+  const navigate = useNavigate();
+  const doctorId = getLoggedInUser()?.id;
+  const [doctorAppointments, setDoctorAppointments] = useState([]);
+  const [patients, setPatients] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const [appointmentsData, patientsData] = await Promise.all([
+          getAppointmentsByDoctor(doctorId),
+          getAllPatients(),
+        ]);
+        setDoctorAppointments(appointmentsData);
+        setPatients(patientsData);
+      } catch (err) {
+        setError(
+          err.response?.data?.message ||
+            "Failed to load appointments. Please try again.",
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [doctorId]);
 
   const patientMap = useMemo(
     () => Object.fromEntries(patients.map((entry) => [entry.id, entry])),
-    [],
-  )
+    [patients],
+  );
 
-  const doctorAppointments = appointments.filter((entry) => entry.doctor_id === doctorId)
+  if (loading) return <LoadingSpinner />;
+  if (error)
+    return (
+      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700 shadow-sm">
+        {error}
+      </div>
+    );
 
   const columns = [
     {
-      key: 'patient',
-      label: 'Patient Name',
-      render: (row) => patientMap[row.patient_id]?.name || 'Unknown Patient',
+      key: "patient",
+      label: "Patient Name",
+      render: (row) => patientMap[row.patient_id]?.name || "Unknown Patient",
     },
     {
-      key: 'date',
-      label: 'Date',
+      key: "date",
+      label: "Date",
       render: (row) => formatDate(row.date),
     },
-    { key: 'time', label: 'Time' },
+    { key: "time", label: "Time" },
     {
-      key: 'status',
-      label: 'Status',
+      key: "status",
+      label: "Status",
       render: (row) => <StatusBadge status={row.status} />,
     },
     {
-      key: 'actions',
-      label: 'Actions',
+      key: "actions",
+      label: "Actions",
       render: (row) => (
         <button
           type="button"
@@ -49,7 +83,7 @@ function DoctorAppointmentsPage() {
         </button>
       ),
     },
-  ]
+  ];
 
   return (
     <div className="space-y-6">
@@ -59,14 +93,14 @@ function DoctorAppointmentsPage() {
       />
 
       <DataTable
-        loading={loading}
+        loading={false}
         columns={columns}
         rows={doctorAppointments}
         emptyTitle="No appointments assigned"
         emptyMessage="Appointments linked to this doctor will be displayed here."
       />
     </div>
-  )
+  );
 }
 
-export default DoctorAppointmentsPage
+export default DoctorAppointmentsPage;

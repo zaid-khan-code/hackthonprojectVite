@@ -1,130 +1,171 @@
-import { useMemo, useState } from 'react'
-import DataTable from '../../components/ui/DataTable'
-import PageHeader from '../../components/ui/PageHeader'
-import StatusBadge from '../../components/ui/StatusBadge'
-import useSimulatedLoading from '../../hooks/useSimulatedLoading'
-import { appointments, patients, users } from '../../data/mockData'
-import { formatDate } from '../../utils/formatters'
+import { useEffect, useMemo, useState } from "react";
+import DataTable from "../../components/ui/DataTable";
+import LoadingSpinner from "../../components/ui/LoadingSpinner";
+import PageHeader from "../../components/ui/PageHeader";
+import StatusBadge from "../../components/ui/StatusBadge";
+import {
+  getAllAppointments,
+  createAppointment,
+  updateAppointmentStatus,
+  cancelAppointment,
+} from "../../services/appointmentService";
+import { getAllDoctors } from "../../services/userService";
+import { getAllPatients } from "../../services/patientService";
+import { formatDate } from "../../utils/formatters";
 
 const initialForm = {
-  patient_id: '',
-  doctor_id: '',
-  date: '',
-  time: '',
-  notes: '',
-}
+  patient_id: "",
+  doctor_id: "",
+  date: "",
+  time: "",
+  notes: "",
+};
 
 function AppointmentsPage() {
-  const loading = useSimulatedLoading(350)
-  const [appointmentRows, setAppointmentRows] = useState(appointments)
-  const [formData, setFormData] = useState(initialForm)
+  const [appointmentRows, setAppointmentRows] = useState([]);
+  const [doctors, setDoctors] = useState([]);
+  const [patients, setPatients] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [formData, setFormData] = useState(initialForm);
+  const [submitting, setSubmitting] = useState(false);
 
-  const doctorRows = useMemo(
-    () => users.filter((entry) => entry.role === 'doctor'),
-    [],
-  )
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const [appointmentsData, doctorsData, patientsData] = await Promise.all([
+        getAllAppointments(),
+        getAllDoctors(),
+        getAllPatients(),
+      ]);
+      setAppointmentRows(appointmentsData);
+      setDoctors(doctorsData);
+      setPatients(patientsData);
+    } catch (err) {
+      setError(
+        err.response?.data?.message || "Failed to load data. Please try again.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const patientMap = useMemo(
     () => Object.fromEntries(patients.map((entry) => [entry.id, entry])),
-    [],
-  )
+    [patients],
+  );
 
   const doctorMap = useMemo(
-    () => Object.fromEntries(doctorRows.map((entry) => [entry.id, entry])),
-    [doctorRows],
-  )
+    () => Object.fromEntries(doctors.map((entry) => [entry.id, entry])),
+    [doctors],
+  );
 
   const handleInputChange = (event) => {
     setFormData((previous) => ({
       ...previous,
       [event.target.name]: event.target.value,
-    }))
-  }
+    }));
+  };
 
-  const handleBookingSubmit = (event) => {
-    event.preventDefault()
-    const timestamp = new Date().toISOString()
-    const nextId = appointmentRows.length
-      ? Math.max(...appointmentRows.map((entry) => entry.id)) + 1
-      : 1
-
-    setAppointmentRows((previous) => [
-      ...previous,
-      {
-        id: nextId,
+  const handleBookingSubmit = async (event) => {
+    event.preventDefault();
+    try {
+      setSubmitting(true);
+      await createAppointment({
         patient_id: Number(formData.patient_id),
         doctor_id: Number(formData.doctor_id),
         date: formData.date,
         time: formData.time,
-        status: 'pending',
         notes: formData.notes,
-        created_at: timestamp,
-        updated_at: timestamp,
-      },
-    ])
+      });
+      setFormData(initialForm);
+      await fetchData();
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "Failed to book appointment. Please try again.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-    setFormData(initialForm)
-  }
+  const handleCancel = async (appointmentId) => {
+    try {
+      await cancelAppointment(appointmentId);
+      await fetchData();
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "Failed to cancel appointment. Please try again.",
+      );
+    }
+  };
 
-  const handleCancel = (appointmentId) => {
-    setAppointmentRows((previous) =>
-      previous.map((entry) =>
-        entry.id === appointmentId
-          ? { ...entry, status: 'cancelled', updated_at: new Date().toISOString() }
-          : entry,
-      ),
-    )
-  }
+  const handleStatusChange = async (appointmentId, status) => {
+    try {
+      await updateAppointmentStatus(appointmentId, status);
+      await fetchData();
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "Failed to update appointment status. Please try again.",
+      );
+    }
+  };
 
-  const handleStatusChange = (appointmentId, status) => {
-    setAppointmentRows((previous) =>
-      previous.map((entry) =>
-        entry.id === appointmentId
-          ? { ...entry, status, updated_at: new Date().toISOString() }
-          : entry,
-      ),
-    )
-  }
+  if (loading) return <LoadingSpinner />;
+  if (error && !appointmentRows.length)
+    return (
+      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700 shadow-sm">
+        {error}
+      </div>
+    );
 
   const columns = [
     {
-      key: 'patient',
-      label: 'Patient Name',
-      render: (row) => patientMap[row.patient_id]?.name || 'Unknown Patient',
+      key: "patient",
+      label: "Patient Name",
+      render: (row) => patientMap[row.patient_id]?.name || "Unknown Patient",
     },
     {
-      key: 'doctor',
-      label: 'Doctor Name',
-      render: (row) => doctorMap[row.doctor_id]?.name || 'Unknown Doctor',
+      key: "doctor",
+      label: "Doctor Name",
+      render: (row) => doctorMap[row.doctor_id]?.name || "Unknown Doctor",
     },
     {
-      key: 'date',
-      label: 'Date',
+      key: "date",
+      label: "Date",
       render: (row) => formatDate(row.date),
     },
-    { key: 'time', label: 'Time' },
+    { key: "time", label: "Time" },
     {
-      key: 'status',
-      label: 'Status',
+      key: "status",
+      label: "Status",
       render: (row) => <StatusBadge status={row.status} />,
     },
     {
-      key: 'actions',
-      label: 'Actions',
+      key: "actions",
+      label: "Actions",
       render: (row) => (
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => handleCancel(row.id)}
             className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={row.status === 'completed' || row.status === 'cancelled'}
+            disabled={row.status === "completed" || row.status === "cancelled"}
           >
             Cancel
           </button>
           <select
-            value={row.status === 'cancelled' ? 'pending' : row.status}
+            value={row.status === "cancelled" ? "pending" : row.status}
             onChange={(event) => handleStatusChange(row.id, event.target.value)}
-            disabled={row.status === 'cancelled'}
+            disabled={row.status === "cancelled"}
             className="rounded-lg border border-blue-200 bg-white px-2 py-1.5 text-xs font-semibold text-blue-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <option value="pending">pending</option>
@@ -134,7 +175,7 @@ function AppointmentsPage() {
         </div>
       ),
     },
-  ]
+  ];
 
   return (
     <div className="space-y-6">
@@ -144,8 +185,13 @@ function AppointmentsPage() {
       />
 
       <section className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-900">Book Appointment</h2>
-        <form onSubmit={handleBookingSubmit} className="mt-4 grid gap-4 md:grid-cols-2">
+        <h2 className="text-lg font-semibold text-slate-900">
+          Book Appointment
+        </h2>
+        <form
+          onSubmit={handleBookingSubmit}
+          className="mt-4 grid gap-4 md:grid-cols-2"
+        >
           <div>
             <label
               htmlFor="patient_id"
@@ -186,7 +232,7 @@ function AppointmentsPage() {
               className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             >
               <option value="">Select doctor</option>
-              {doctorRows.map((entry) => (
+              {doctors.map((entry) => (
                 <option key={entry.id} value={entry.id}>
                   {entry.name}
                 </option>
@@ -195,7 +241,10 @@ function AppointmentsPage() {
           </div>
 
           <div>
-            <label htmlFor="date" className="mb-1.5 block text-sm font-semibold text-slate-700">
+            <label
+              htmlFor="date"
+              className="mb-1.5 block text-sm font-semibold text-slate-700"
+            >
               date
             </label>
             <input
@@ -210,7 +259,10 @@ function AppointmentsPage() {
           </div>
 
           <div>
-            <label htmlFor="time" className="mb-1.5 block text-sm font-semibold text-slate-700">
+            <label
+              htmlFor="time"
+              className="mb-1.5 block text-sm font-semibold text-slate-700"
+            >
               time
             </label>
             <input
@@ -225,7 +277,10 @@ function AppointmentsPage() {
           </div>
 
           <div className="md:col-span-2">
-            <label htmlFor="notes" className="mb-1.5 block text-sm font-semibold text-slate-700">
+            <label
+              htmlFor="notes"
+              className="mb-1.5 block text-sm font-semibold text-slate-700"
+            >
               notes
             </label>
             <textarea
@@ -251,17 +306,25 @@ function AppointmentsPage() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-lg font-semibold text-slate-900">All Appointments</h2>
+        <h2 className="text-lg font-semibold text-slate-900">
+          All Appointments
+        </h2>
         <DataTable
-          loading={loading}
+          loading={false}
           columns={columns}
           rows={appointmentRows}
           emptyTitle="No appointments yet"
           emptyMessage="Booked appointments will appear in this table."
         />
+
+        {error && appointmentRows.length > 0 && (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+            {error}
+          </div>
+        )}
       </section>
     </div>
-  )
+  );
 }
 
-export default AppointmentsPage
+export default AppointmentsPage;

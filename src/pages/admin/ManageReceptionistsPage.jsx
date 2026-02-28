@@ -1,117 +1,166 @@
-import { Plus } from 'lucide-react'
-import { useMemo, useState } from 'react'
-import DataTable from '../../components/ui/DataTable'
-import Modal from '../../components/ui/Modal'
-import PageHeader from '../../components/ui/PageHeader'
-import useSimulatedLoading from '../../hooks/useSimulatedLoading'
-import { users } from '../../data/mockData'
-import { formatDateTime } from '../../utils/formatters'
+import { Plus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import DataTable from "../../components/ui/DataTable";
+import LoadingSpinner from "../../components/ui/LoadingSpinner";
+import Modal from "../../components/ui/Modal";
+import PageHeader from "../../components/ui/PageHeader";
+import {
+  getAllReceptionists,
+  createUser,
+  updateUser,
+  deleteUser,
+} from "../../services/userService";
+import { getAllRoles } from "../../services/roleService";
+import { formatDateTime } from "../../utils/formatters";
 
 const initialForm = {
-  name: '',
-  email: '',
-  password: '',
-}
+  name: "",
+  email: "",
+  password: "",
+  role_id: "",
+};
 
 function ManageReceptionistsPage() {
-  const loading = useSimulatedLoading(350)
-  const [receptionists, setReceptionists] = useState(() =>
-    users.filter((entry) => entry.role === 'receptionist'),
-  )
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [editingReceptionistId, setEditingReceptionistId] = useState(null)
-  const [formData, setFormData] = useState(initialForm)
+  const [receptionists, setReceptionists] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingReceptionistId, setEditingReceptionistId] = useState(null);
+  const [formData, setFormData] = useState(initialForm);
+  const [submitting, setSubmitting] = useState(false);
+  const [roles, setRoles] = useState([]);
+  const [rolesLoading, setRolesLoading] = useState(true);
 
   const modalTitle = useMemo(
-    () => (editingReceptionistId ? 'Edit Receptionist' : 'Add Receptionist'),
+    () => (editingReceptionistId ? "Edit Receptionist" : "Add Receptionist"),
     [editingReceptionistId],
-  )
+  );
+
+  const fetchReceptionists = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await getAllReceptionists();
+      setReceptionists(data);
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "Failed to load receptionists. Please try again.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchReceptionists();
+    const fetchRoles = async () => {
+      try {
+        setRolesLoading(true);
+        const data = await getAllRoles();
+        setRoles(data);
+      } catch (err) {
+        console.error("Failed to load roles", err);
+      } finally {
+        setRolesLoading(false);
+      }
+    };
+    fetchRoles();
+  }, []);
 
   const handleInputChange = (event) => {
     setFormData((previous) => ({
       ...previous,
       [event.target.name]: event.target.value,
-    }))
-  }
+    }));
+  };
 
   const resetForm = () => {
-    setFormData(initialForm)
-    setEditingReceptionistId(null)
-  }
+    setFormData(initialForm);
+    setEditingReceptionistId(null);
+  };
 
   const openCreateModal = () => {
-    resetForm()
-    setIsModalOpen(true)
-  }
+    resetForm();
+    setIsModalOpen(true);
+  };
 
   const openEditModal = (receptionist) => {
-    setEditingReceptionistId(receptionist.id)
+    setEditingReceptionistId(receptionist.id);
     setFormData({
       name: receptionist.name,
       email: receptionist.email,
-      password: '',
-    })
-    setIsModalOpen(true)
-  }
+      password: "",
+      role_id: receptionist.role_id || "",
+    });
+    setIsModalOpen(true);
+  };
 
-  const handleDelete = (receptionistId) => {
-    setReceptionists((previous) =>
-      previous.filter((receptionist) => receptionist.id !== receptionistId),
-    )
-  }
+  const handleDelete = async (receptionistId) => {
+    try {
+      await deleteUser(receptionistId);
+      await fetchReceptionists();
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "Failed to delete receptionist. Please try again.",
+      );
+    }
+  };
 
-  const handleSubmit = (event) => {
-    event.preventDefault()
-    const timestamp = new Date().toISOString()
-
-    if (editingReceptionistId) {
-      setReceptionists((previous) =>
-        previous.map((receptionist) =>
-          receptionist.id === editingReceptionistId
-            ? {
-                ...receptionist,
-                name: formData.name,
-                email: formData.email,
-                password: formData.password || receptionist.password,
-                updated_at: timestamp,
-              }
-            : receptionist,
-        ),
-      )
-    } else {
-      const nextId = receptionists.length
-        ? Math.max(...receptionists.map((receptionist) => receptionist.id)) + 1
-        : 1
-      setReceptionists((previous) => [
-        ...previous,
-        {
-          id: nextId,
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    try {
+      setSubmitting(true);
+      if (editingReceptionistId) {
+        const updateData = {
+          name: formData.name,
+          email: formData.email,
+        };
+        if (formData.password) {
+          updateData.password = formData.password;
+        }
+        await updateUser(editingReceptionistId, updateData);
+      } else {
+        await createUser({
           name: formData.name,
           email: formData.email,
           password: formData.password,
-          role: 'receptionist',
-          specialty: null,
-          created_at: timestamp,
-          updated_at: timestamp,
-        },
-      ])
+          role_id: Number(formData.role_id),
+        });
+      }
+      setIsModalOpen(false);
+      resetForm();
+      await fetchReceptionists();
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "Failed to save receptionist. Please try again.",
+      );
+    } finally {
+      setSubmitting(false);
     }
+  };
 
-    setIsModalOpen(false)
-    resetForm()
-  }
+  if (loading) return <LoadingSpinner />;
+  if (error && !receptionists.length)
+    return (
+      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700 shadow-sm">
+        {error}
+      </div>
+    );
 
   const columns = [
-    { key: 'name', label: 'Name' },
-    { key: 'email', label: 'Email' },
+    { key: "name", label: "Name" },
+    { key: "email", label: "Email" },
     {
-      key: 'created_at',
-      label: 'Created At',
+      key: "created_at",
+      label: "Created At",
       render: (row) => formatDateTime(row.created_at),
     },
     {
-      key: 'actions',
-      label: 'Actions',
+      key: "actions",
+      label: "Actions",
       render: (row) => (
         <div className="flex items-center gap-2">
           <button
@@ -131,7 +180,7 @@ function ManageReceptionistsPage() {
         </div>
       ),
     },
-  ]
+  ];
 
   return (
     <div className="space-y-6">
@@ -151,17 +200,30 @@ function ManageReceptionistsPage() {
       />
 
       <DataTable
-        loading={loading}
+        loading={false}
         columns={columns}
         rows={receptionists}
         emptyTitle="No receptionists found"
         emptyMessage="Add your first receptionist to manage patients and bookings."
       />
 
-      <Modal open={isModalOpen} title={modalTitle} onClose={() => setIsModalOpen(false)}>
+      {error && receptionists.length > 0 && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+          {error}
+        </div>
+      )}
+
+      <Modal
+        open={isModalOpen}
+        title={modalTitle}
+        onClose={() => setIsModalOpen(false)}
+      >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="name" className="mb-1.5 block text-sm font-semibold text-slate-700">
+            <label
+              htmlFor="name"
+              className="mb-1.5 block text-sm font-semibold text-slate-700"
+            >
               name
             </label>
             <input
@@ -177,7 +239,10 @@ function ManageReceptionistsPage() {
           </div>
 
           <div>
-            <label htmlFor="email" className="mb-1.5 block text-sm font-semibold text-slate-700">
+            <label
+              htmlFor="email"
+              className="mb-1.5 block text-sm font-semibold text-slate-700"
+            >
               email
             </label>
             <input
@@ -211,18 +276,49 @@ function ManageReceptionistsPage() {
             />
           </div>
 
+          <div>
+            <label
+              htmlFor="role_id"
+              className="mb-1.5 block text-sm font-semibold text-slate-700"
+            >
+              role
+            </label>
+            {rolesLoading ? (
+              <p className="text-sm text-slate-500">Loading roles...</p>
+            ) : (
+              <select
+                id="role_id"
+                name="role_id"
+                value={formData.role_id}
+                onChange={handleInputChange}
+                required={!editingReceptionistId}
+                disabled={!!editingReceptionistId}
+                className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="">Select role</option>
+                {roles.map((role) => (
+                  <option key={role.id} value={role.id}>
+                    {role.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
           <div className="pt-2">
             <button
               type="submit"
               className="inline-flex w-full justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
             >
-              {editingReceptionistId ? 'Update Receptionist' : 'Create Receptionist'}
+              {editingReceptionistId
+                ? "Update Receptionist"
+                : "Create Receptionist"}
             </button>
           </div>
         </form>
       </Modal>
     </div>
-  )
+  );
 }
 
-export default ManageReceptionistsPage
+export default ManageReceptionistsPage;

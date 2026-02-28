@@ -1,23 +1,57 @@
-import { CalendarDays, ClipboardList, FileText } from 'lucide-react'
-import PageHeader from '../../components/ui/PageHeader'
-import StatCard from '../../components/ui/StatCard'
-import { CURRENT_SESSION, appointments, diagnosisLogs, prescriptions } from '../../data/mockData'
+import { useEffect, useState } from "react";
+import { CalendarDays, ClipboardList, FileText } from "lucide-react";
+import LoadingSpinner from "../../components/ui/LoadingSpinner";
+import PageHeader from "../../components/ui/PageHeader";
+import StatCard from "../../components/ui/StatCard";
+import { getLoggedInUser } from "../../services/authService";
+import { getAppointmentsByDoctor } from "../../services/appointmentService";
+import { getPrescriptionsByDoctor } from "../../services/prescriptionService";
+import { getDiagnosisByDoctor } from "../../services/diagnosisService";
 
 function DoctorDashboardPage() {
-  const today = new Date().toISOString().slice(0, 10)
-  const doctorId = CURRENT_SESSION.doctorId
+  const doctorId = getLoggedInUser()?.id;
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [todaysAppointments, setTodaysAppointments] = useState(0);
+  const [totalPrescriptions, setTotalPrescriptions] = useState(0);
+  const [totalDiagnoses, setTotalDiagnoses] = useState(0);
 
-  const todaysAppointments = appointments.filter(
-    (entry) => entry.doctor_id === doctorId && entry.date === today,
-  ).length
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const [appointmentsData, prescriptionsData, diagnosisData] =
+          await Promise.all([
+            getAppointmentsByDoctor(doctorId),
+            getPrescriptionsByDoctor(doctorId),
+            getDiagnosisByDoctor(doctorId),
+          ]);
+        const today = new Date().toISOString().slice(0, 10);
+        setTodaysAppointments(
+          appointmentsData.filter((entry) => entry.date === today).length,
+        );
+        setTotalPrescriptions(prescriptionsData.length);
+        setTotalDiagnoses(diagnosisData.length);
+      } catch (err) {
+        setError(
+          err.response?.data?.message ||
+            "Failed to load dashboard data. Please try again.",
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [doctorId]);
 
-  const totalPrescriptions = prescriptions.filter(
-    (entry) => entry.doctor_id === doctorId,
-  ).length
-
-  const totalDiagnoses = diagnosisLogs.filter(
-    (entry) => entry.doctor_id === doctorId,
-  ).length
+  if (loading) return <LoadingSpinner />;
+  if (error)
+    return (
+      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700 shadow-sm">
+        {error}
+      </div>
+    );
 
   return (
     <div className="space-y-6">
@@ -44,7 +78,7 @@ function DoctorDashboardPage() {
         />
       </section>
     </div>
-  )
+  );
 }
 
-export default DoctorDashboardPage
+export default DoctorDashboardPage;

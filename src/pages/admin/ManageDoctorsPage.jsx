@@ -1,120 +1,171 @@
-import { Plus } from 'lucide-react'
-import { useMemo, useState } from 'react'
-import DataTable from '../../components/ui/DataTable'
-import Modal from '../../components/ui/Modal'
-import PageHeader from '../../components/ui/PageHeader'
-import useSimulatedLoading from '../../hooks/useSimulatedLoading'
-import { users } from '../../data/mockData'
-import { formatDateTime } from '../../utils/formatters'
+import { Plus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import DataTable from "../../components/ui/DataTable";
+import LoadingSpinner from "../../components/ui/LoadingSpinner";
+import Modal from "../../components/ui/Modal";
+import PageHeader from "../../components/ui/PageHeader";
+import {
+  getAllDoctors,
+  createUser,
+  updateUser,
+  deleteUser,
+} from "../../services/userService";
+import { getAllRoles } from "../../services/roleService";
+import { formatDateTime } from "../../utils/formatters";
 
 const initialForm = {
-  name: '',
-  email: '',
-  password: '',
-  specialty: '',
-}
+  name: "",
+  email: "",
+  password: "",
+  specialty: "",
+  role_id: "",
+};
 
 function ManageDoctorsPage() {
-  const loading = useSimulatedLoading(350)
-  const [doctors, setDoctors] = useState(() =>
-    users.filter((entry) => entry.role === 'doctor'),
-  )
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [editingDoctorId, setEditingDoctorId] = useState(null)
-  const [formData, setFormData] = useState(initialForm)
+  const [doctors, setDoctors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingDoctorId, setEditingDoctorId] = useState(null);
+  const [formData, setFormData] = useState(initialForm);
+  const [submitting, setSubmitting] = useState(false);
+  const [roles, setRoles] = useState([]);
+  const [rolesLoading, setRolesLoading] = useState(true);
 
   const modalTitle = useMemo(
-    () => (editingDoctorId ? 'Edit Doctor' : 'Add Doctor'),
+    () => (editingDoctorId ? "Edit Doctor" : "Add Doctor"),
     [editingDoctorId],
-  )
+  );
+
+  const fetchDoctors = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await getAllDoctors();
+      setDoctors(data);
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "Failed to load doctors. Please try again.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDoctors();
+    const fetchRoles = async () => {
+      try {
+        setRolesLoading(true);
+        const data = await getAllRoles();
+        setRoles(data);
+      } catch (err) {
+        console.error("Failed to load roles", err);
+      } finally {
+        setRolesLoading(false);
+      }
+    };
+    fetchRoles();
+  }, []);
 
   const handleInputChange = (event) => {
     setFormData((previous) => ({
       ...previous,
       [event.target.name]: event.target.value,
-    }))
-  }
+    }));
+  };
 
   const resetForm = () => {
-    setFormData(initialForm)
-    setEditingDoctorId(null)
-  }
+    setFormData(initialForm);
+    setEditingDoctorId(null);
+  };
 
   const openCreateModal = () => {
-    resetForm()
-    setIsModalOpen(true)
-  }
+    resetForm();
+    setIsModalOpen(true);
+  };
 
   const openEditModal = (doctor) => {
-    setEditingDoctorId(doctor.id)
+    setEditingDoctorId(doctor.id);
     setFormData({
       name: doctor.name,
       email: doctor.email,
-      password: '',
-      specialty: doctor.specialty || '',
-    })
-    setIsModalOpen(true)
-  }
+      password: "",
+      specialty: doctor.specialty || "",
+      role_id: doctor.role_id || "",
+    });
+    setIsModalOpen(true);
+  };
 
-  const handleDelete = (doctorId) => {
-    setDoctors((previous) => previous.filter((doctor) => doctor.id !== doctorId))
-  }
+  const handleDelete = async (doctorId) => {
+    try {
+      await deleteUser(doctorId);
+      await fetchDoctors();
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "Failed to delete doctor. Please try again.",
+      );
+    }
+  };
 
-  const handleSubmit = (event) => {
-    event.preventDefault()
-    const timestamp = new Date().toISOString()
-
-    if (editingDoctorId) {
-      setDoctors((previous) =>
-        previous.map((doctor) =>
-          doctor.id === editingDoctorId
-            ? {
-                ...doctor,
-                name: formData.name,
-                email: formData.email,
-                password: formData.password || doctor.password,
-                specialty: formData.specialty,
-                updated_at: timestamp,
-              }
-            : doctor,
-        ),
-      )
-    } else {
-      const nextId = doctors.length
-        ? Math.max(...doctors.map((doctor) => doctor.id)) + 1
-        : 1
-
-      setDoctors((previous) => [
-        ...previous,
-        {
-          id: nextId,
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    try {
+      setSubmitting(true);
+      if (editingDoctorId) {
+        const updateData = {
+          name: formData.name,
+          email: formData.email,
+          specialty: formData.specialty,
+        };
+        if (formData.password) {
+          updateData.password = formData.password;
+        }
+        await updateUser(editingDoctorId, updateData);
+      } else {
+        await createUser({
           name: formData.name,
           email: formData.email,
           password: formData.password,
-          role: 'doctor',
           specialty: formData.specialty,
-          created_at: timestamp,
-          updated_at: timestamp,
-        },
-      ])
+          role_id: Number(formData.role_id),
+        });
+      }
+      setIsModalOpen(false);
+      resetForm();
+      await fetchDoctors();
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "Failed to save doctor. Please try again.",
+      );
+    } finally {
+      setSubmitting(false);
     }
+  };
 
-    setIsModalOpen(false)
-    resetForm()
-  }
+  if (loading) return <LoadingSpinner />;
+  if (error && !doctors.length)
+    return (
+      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700 shadow-sm">
+        {error}
+      </div>
+    );
 
   const columns = [
-    { key: 'name', label: 'Name' },
-    { key: 'email', label: 'Email' },
-    { key: 'specialty', label: 'Specialty' },
+    { key: "name", label: "Name" },
+    { key: "email", label: "Email" },
+    { key: "specialty", label: "Specialty" },
     {
-      key: 'created_at',
-      label: 'Created At',
+      key: "created_at",
+      label: "Created At",
       render: (row) => formatDateTime(row.created_at),
     },
     {
-      key: 'actions',
-      label: 'Actions',
+      key: "actions",
+      label: "Actions",
       render: (row) => (
         <div className="flex items-center gap-2">
           <button
@@ -134,7 +185,7 @@ function ManageDoctorsPage() {
         </div>
       ),
     },
-  ]
+  ];
 
   return (
     <div className="space-y-6">
@@ -154,17 +205,30 @@ function ManageDoctorsPage() {
       />
 
       <DataTable
-        loading={loading}
+        loading={false}
         columns={columns}
         rows={doctors}
         emptyTitle="No doctors found"
         emptyMessage="Add your first doctor to start managing appointments."
       />
 
-      <Modal open={isModalOpen} title={modalTitle} onClose={() => setIsModalOpen(false)}>
+      {error && doctors.length > 0 && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+          {error}
+        </div>
+      )}
+
+      <Modal
+        open={isModalOpen}
+        title={modalTitle}
+        onClose={() => setIsModalOpen(false)}
+      >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="name" className="mb-1.5 block text-sm font-semibold text-slate-700">
+            <label
+              htmlFor="name"
+              className="mb-1.5 block text-sm font-semibold text-slate-700"
+            >
               name
             </label>
             <input
@@ -180,7 +244,10 @@ function ManageDoctorsPage() {
           </div>
 
           <div>
-            <label htmlFor="email" className="mb-1.5 block text-sm font-semibold text-slate-700">
+            <label
+              htmlFor="email"
+              className="mb-1.5 block text-sm font-semibold text-slate-700"
+            >
               email
             </label>
             <input
@@ -233,18 +300,47 @@ function ManageDoctorsPage() {
             />
           </div>
 
+          <div>
+            <label
+              htmlFor="role_id"
+              className="mb-1.5 block text-sm font-semibold text-slate-700"
+            >
+              role
+            </label>
+            {rolesLoading ? (
+              <p className="text-sm text-slate-500">Loading roles...</p>
+            ) : (
+              <select
+                id="role_id"
+                name="role_id"
+                value={formData.role_id}
+                onChange={handleInputChange}
+                required={!editingDoctorId}
+                disabled={!!editingDoctorId}
+                className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="">Select role</option>
+                {roles.map((role) => (
+                  <option key={role.id} value={role.id}>
+                    {role.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
           <div className="pt-2">
             <button
               type="submit"
               className="inline-flex w-full justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
             >
-              {editingDoctorId ? 'Update Doctor' : 'Create Doctor'}
+              {editingDoctorId ? "Update Doctor" : "Create Doctor"}
             </button>
           </div>
         </form>
       </Modal>
     </div>
-  )
+  );
 }
 
-export default ManageDoctorsPage
+export default ManageDoctorsPage;

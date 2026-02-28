@@ -1,44 +1,48 @@
-import { HeartPulse, LogIn } from 'lucide-react'
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { users } from '../data/mockData'
+import { HeartPulse, LogIn } from "lucide-react";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { login } from "../services/authService";
 
 const rolePathMap = {
-  admin: '/admin',
-  doctor: '/doctor',
-  receptionist: '/receptionist',
-  patient: '/patient/dashboard',
-}
+  1: "/admin",
+  2: "/doctor",
+  3: "/receptionist",
+  4: "/patient/dashboard",
+  admin: "/admin",
+  doctor: "/doctor",
+  receptionist: "/receptionist",
+  patient: "/patient/dashboard",
+};
 
 function LoginPage() {
-  const navigate = useNavigate()
-  const [formData, setFormData] = useState({ email: '', password: '' })
-  const [error, setError] = useState('')
+  const navigate = useNavigate();
+  const [formData, setFormData] = useState({ email: "", password: "" });
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const handleChange = (event) => {
     setFormData((previous) => ({
       ...previous,
       [event.target.name]: event.target.value,
-    }))
-    setError('')
-  }
+    }));
+    setError("");
+  };
 
-  const handleSubmit = (event) => {
-    event.preventDefault()
-
-    const user = users.find(
-      (entry) =>
-        entry.email.toLowerCase() === formData.email.toLowerCase() &&
-        entry.password === formData.password,
-    )
-
-    if (!user) {
-      setError('Invalid email or password.')
-      return
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    try {
+      setSubmitting(true);
+      setError("");
+      const user = await login(formData.email, formData.password);
+      localStorage.setItem("user", JSON.stringify(user));
+      const path = rolePathMap[user.role_id] || rolePathMap[user.role] || "/";
+      navigate(path);
+    } catch (err) {
+      setError(err.response?.data?.message || "Invalid email or password.");
+    } finally {
+      setSubmitting(false);
     }
-
-    navigate(rolePathMap[user.role] || '/')
-  }
+  };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_left,_#bfdbfe_0,_#eff6ff_35%,_#f8fbff_100%)] px-4">
@@ -55,7 +59,10 @@ function LoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="email" className="mb-1.5 block text-sm font-semibold text-slate-700">
+            <label
+              htmlFor="email"
+              className="mb-1.5 block text-sm font-semibold text-slate-700"
+            >
               email
             </label>
             <input
@@ -100,19 +107,22 @@ function LoginPage() {
             className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
           >
             <LogIn className="h-4 w-4" />
-            Sign In
+            {submitting ? "Signing in..." : "Sign In"}
           </button>
         </form>
 
         <p className="mt-5 text-center text-sm text-slate-500">
-          Need role selection?{' '}
-          <Link to="/" className="font-semibold text-blue-700 hover:text-blue-800">
+          Need role selection?{" "}
+          <Link
+            to="/"
+            className="font-semibold text-blue-700 hover:text-blue-800"
+          >
             Back to Landing
           </Link>
         </p>
       </section>
     </div>
-  )
+  );
 }
 
-export default LoginPage
+export default LoginPage;

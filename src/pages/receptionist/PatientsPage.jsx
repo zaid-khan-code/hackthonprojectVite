@@ -1,121 +1,158 @@
-import { Eye, Plus } from 'lucide-react'
-import { useMemo, useState } from 'react'
-import DataTable from '../../components/ui/DataTable'
-import Modal from '../../components/ui/Modal'
-import PageHeader from '../../components/ui/PageHeader'
-import useSimulatedLoading from '../../hooks/useSimulatedLoading'
-import { patients } from '../../data/mockData'
-import { formatDateTime } from '../../utils/formatters'
+import { Eye, Plus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import DataTable from "../../components/ui/DataTable";
+import LoadingSpinner from "../../components/ui/LoadingSpinner";
+import Modal from "../../components/ui/Modal";
+import PageHeader from "../../components/ui/PageHeader";
+import {
+  getAllPatients,
+  createPatient,
+  updatePatient,
+  deletePatient,
+} from "../../services/patientService";
+import { formatDateTime } from "../../utils/formatters";
 
 const initialForm = {
-  name: '',
-  age: '',
-  gender: 'Male',
-  contact: '',
-  blood_group: '',
-}
+  name: "",
+  age: "",
+  gender: "male",
+  contact: "",
+  blood_group: "",
+};
 
 function PatientsPage() {
-  const loading = useSimulatedLoading(350)
-  const [patientRows, setPatientRows] = useState(patients)
-  const [isFormModalOpen, setIsFormModalOpen] = useState(false)
-  const [isViewModalOpen, setIsViewModalOpen] = useState(false)
-  const [editingPatientId, setEditingPatientId] = useState(null)
-  const [selectedPatient, setSelectedPatient] = useState(null)
-  const [formData, setFormData] = useState(initialForm)
+  const [patientRows, setPatientRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [editingPatientId, setEditingPatientId] = useState(null);
+  const [selectedPatient, setSelectedPatient] = useState(null);
+  const [formData, setFormData] = useState(initialForm);
+  const [submitting, setSubmitting] = useState(false);
 
   const modalTitle = useMemo(
-    () => (editingPatientId ? 'Edit Patient' : 'Add Patient'),
+    () => (editingPatientId ? "Edit Patient" : "Add Patient"),
     [editingPatientId],
-  )
+  );
+
+  const fetchPatients = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await getAllPatients();
+      setPatientRows(data);
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "Failed to load patients. Please try again.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPatients();
+  }, []);
 
   const resetForm = () => {
-    setFormData(initialForm)
-    setEditingPatientId(null)
-  }
+    setFormData(initialForm);
+    setEditingPatientId(null);
+  };
 
   const openCreateModal = () => {
-    resetForm()
-    setIsFormModalOpen(true)
-  }
+    resetForm();
+    setIsFormModalOpen(true);
+  };
 
   const openEditModal = (patient) => {
-    setEditingPatientId(patient.id)
+    setEditingPatientId(patient.id);
     setFormData({
       name: patient.name,
       age: patient.age.toString(),
       gender: patient.gender,
       contact: patient.contact,
       blood_group: patient.blood_group,
-    })
-    setIsFormModalOpen(true)
-  }
+    });
+    setIsFormModalOpen(true);
+  };
 
   const openViewModal = (patient) => {
-    setSelectedPatient(patient)
-    setIsViewModalOpen(true)
-  }
+    setSelectedPatient(patient);
+    setIsViewModalOpen(true);
+  };
 
   const handleInputChange = (event) => {
     setFormData((previous) => ({
       ...previous,
       [event.target.name]: event.target.value,
-    }))
-  }
+    }));
+    console.log(formData);
+  };
 
-  const handleSubmit = (event) => {
-    event.preventDefault()
-    const timestamp = new Date().toISOString()
+  const handleDelete = async (patientId) => {
+    try {
+      await deletePatient(patientId);
+      await fetchPatients();
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "Failed to delete patient. Please try again.",
+      );
+    }
+  };
 
-    if (editingPatientId) {
-      setPatientRows((previous) =>
-        previous.map((patient) =>
-          patient.id === editingPatientId
-            ? {
-                ...patient,
-                name: formData.name,
-                age: Number(formData.age),
-                gender: formData.gender,
-                contact: formData.contact,
-                blood_group: formData.blood_group,
-                updated_at: timestamp,
-              }
-            : patient,
-        ),
-      )
-    } else {
-      const nextId = patientRows.length
-        ? Math.max(...patientRows.map((patient) => patient.id)) + 1
-        : 1
-
-      setPatientRows((previous) => [
-        ...previous,
-        {
-          id: nextId,
-          user_id: null,
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    try {
+      setSubmitting(true);
+      if (editingPatientId) {
+        await updatePatient(editingPatientId, {
           name: formData.name,
           age: Number(formData.age),
           gender: formData.gender,
           contact: formData.contact,
           blood_group: formData.blood_group,
-          created_at: timestamp,
-          updated_at: timestamp,
-        },
-      ])
+        });
+      } else {
+        await createPatient({
+          name: formData.name,
+          age: Number(formData.age),
+          gender: formData.gender,
+          contact: formData.contact,
+          blood_group: formData.blood_group,
+        });
+      }
+      setIsFormModalOpen(false);
+      resetForm();
+      await fetchPatients();
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "Failed to save patient. Please try again.",
+      );
+    } finally {
+      setSubmitting(false);
     }
+  };
 
-    setIsFormModalOpen(false)
-    resetForm()
-  }
+  if (loading) return <LoadingSpinner />;
+  if (error && !patientRows.length)
+    return (
+      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700 shadow-sm">
+        {error}
+      </div>
+    );
 
   const columns = [
-    { key: 'name', label: 'Name' },
-    { key: 'age', label: 'Age' },
-    { key: 'gender', label: 'Gender' },
-    { key: 'contact', label: 'Contact' },
+    { key: "name", label: "Name" },
+    { key: "age", label: "Age" },
+    { key: "gender", label: "Gender" },
+    { key: "contact", label: "Contact" },
     {
-      key: 'blood_group',
-      label: 'Blood Group',
+      key: "blood_group",
+      label: "Blood Group",
       render: (row) => (
         <span className="rounded-lg bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
           {row.blood_group}
@@ -123,13 +160,13 @@ function PatientsPage() {
       ),
     },
     {
-      key: 'created_at',
-      label: 'Created At',
+      key: "created_at",
+      label: "Created At",
       render: (row) => formatDateTime(row.created_at),
     },
     {
-      key: 'actions',
-      label: 'Actions',
+      key: "actions",
+      label: "Actions",
       render: (row) => (
         <div className="flex items-center gap-2">
           <button
@@ -146,10 +183,17 @@ function PatientsPage() {
           >
             Edit
           </button>
+          <button
+            type="button"
+            onClick={() => handleDelete(row.id)}
+            className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
+          >
+            Delete
+          </button>
         </div>
       ),
     },
-  ]
+  ];
 
   return (
     <div className="space-y-6">
@@ -169,12 +213,18 @@ function PatientsPage() {
       />
 
       <DataTable
-        loading={loading}
+        loading={false}
         columns={columns}
         rows={patientRows}
         emptyTitle="No patients found"
         emptyMessage="Add patient records to start booking appointments."
       />
+
+      {error && patientRows.length > 0 && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+          {error}
+        </div>
+      )}
 
       <Modal
         open={isFormModalOpen}
@@ -183,7 +233,10 @@ function PatientsPage() {
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="name" className="mb-1.5 block text-sm font-semibold text-slate-700">
+            <label
+              htmlFor="name"
+              className="mb-1.5 block text-sm font-semibold text-slate-700"
+            >
               name
             </label>
             <input
@@ -200,7 +253,10 @@ function PatientsPage() {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label htmlFor="age" className="mb-1.5 block text-sm font-semibold text-slate-700">
+              <label
+                htmlFor="age"
+                className="mb-1.5 block text-sm font-semibold text-slate-700"
+              >
                 age
               </label>
               <input
@@ -229,9 +285,9 @@ function PatientsPage() {
                 onChange={handleInputChange}
                 className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               >
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Other">Other</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
               </select>
             </div>
           </div>
@@ -278,7 +334,7 @@ function PatientsPage() {
             type="submit"
             className="inline-flex w-full justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
           >
-            {editingPatientId ? 'Update Patient' : 'Create Patient'}
+            {editingPatientId ? "Update Patient" : "Create Patient"}
           </button>
         </form>
       </Modal>
@@ -291,28 +347,44 @@ function PatientsPage() {
         {selectedPatient ? (
           <dl className="grid gap-4 rounded-xl border border-blue-100 bg-blue-50/50 p-4 sm:grid-cols-2">
             <div>
-              <dt className="text-xs font-semibold uppercase tracking-wide text-blue-700">Name</dt>
-              <dd className="mt-1 text-sm text-slate-800">{selectedPatient.name}</dd>
+              <dt className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+                Name
+              </dt>
+              <dd className="mt-1 text-sm text-slate-800">
+                {selectedPatient.name}
+              </dd>
             </div>
             <div>
-              <dt className="text-xs font-semibold uppercase tracking-wide text-blue-700">Age</dt>
-              <dd className="mt-1 text-sm text-slate-800">{selectedPatient.age}</dd>
+              <dt className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+                Age
+              </dt>
+              <dd className="mt-1 text-sm text-slate-800">
+                {selectedPatient.age}
+              </dd>
             </div>
             <div>
-              <dt className="text-xs font-semibold uppercase tracking-wide text-blue-700">Gender</dt>
-              <dd className="mt-1 text-sm text-slate-800">{selectedPatient.gender}</dd>
+              <dt className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+                Gender
+              </dt>
+              <dd className="mt-1 text-sm text-slate-800">
+                {selectedPatient.gender}
+              </dd>
             </div>
             <div>
               <dt className="text-xs font-semibold uppercase tracking-wide text-blue-700">
                 Contact
               </dt>
-              <dd className="mt-1 text-sm text-slate-800">{selectedPatient.contact}</dd>
+              <dd className="mt-1 text-sm text-slate-800">
+                {selectedPatient.contact}
+              </dd>
             </div>
             <div>
               <dt className="text-xs font-semibold uppercase tracking-wide text-blue-700">
                 Blood Group
               </dt>
-              <dd className="mt-1 text-sm text-slate-800">{selectedPatient.blood_group}</dd>
+              <dd className="mt-1 text-sm text-slate-800">
+                {selectedPatient.blood_group}
+              </dd>
             </div>
             <div>
               <dt className="text-xs font-semibold uppercase tracking-wide text-blue-700">
@@ -326,7 +398,7 @@ function PatientsPage() {
         ) : null}
       </Modal>
     </div>
-  )
+  );
 }
 
-export default PatientsPage
+export default PatientsPage;

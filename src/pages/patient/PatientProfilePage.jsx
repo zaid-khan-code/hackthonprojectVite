@@ -1,173 +1,206 @@
-import clsx from 'clsx'
-import { Activity, CalendarDays, ClipboardList, UserRound } from 'lucide-react'
-import { useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
-import DataTable from '../../components/ui/DataTable'
-import PageHeader from '../../components/ui/PageHeader'
-import StatusBadge from '../../components/ui/StatusBadge'
-import useSimulatedLoading from '../../hooks/useSimulatedLoading'
+import clsx from "clsx";
+import { Activity, CalendarDays, ClipboardList, UserRound } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useParams } from "react-router-dom";
+import DataTable from "../../components/ui/DataTable";
+import LoadingSpinner from "../../components/ui/LoadingSpinner";
+import PageHeader from "../../components/ui/PageHeader";
+import StatusBadge from "../../components/ui/StatusBadge";
+import { getLoggedInUser } from "../../services/authService";
+import { getPatientById } from "../../services/patientService";
+import { getAppointmentsByPatient } from "../../services/appointmentService";
 import {
-  CURRENT_SESSION,
-  appointments,
-  diagnosisLogs,
-  patients,
-  prescriptions,
-  users,
-} from '../../data/mockData'
-import { formatDate, formatDateTime } from '../../utils/formatters'
+  getPrescriptionsByPatient,
+  createPrescription,
+} from "../../services/prescriptionService";
+import {
+  getDiagnosisByPatient,
+  createDiagnosis,
+} from "../../services/diagnosisService";
+import { getAllDoctors } from "../../services/userService";
+import { formatDate, formatDateTime } from "../../utils/formatters";
 
 const tabs = [
-  { key: 'appointments', label: 'Appointment History', icon: CalendarDays },
-  { key: 'prescriptions', label: 'Prescription History', icon: ClipboardList },
-  { key: 'diagnosis', label: 'Diagnosis History', icon: Activity },
-]
+  { key: "appointments", label: "Appointment History", icon: CalendarDays },
+  { key: "prescriptions", label: "Prescription History", icon: ClipboardList },
+  { key: "diagnosis", label: "Diagnosis History", icon: Activity },
+];
 
 function PatientProfilePage() {
-  const loading = useSimulatedLoading(350)
-  const { id } = useParams()
-  const patientId = Number(id)
+  const { id } = useParams();
+  const patientId = Number(id);
 
-  const patient = patients.find((entry) => entry.id === patientId)
-  const doctorMap = useMemo(
-    () =>
-      Object.fromEntries(
-        users
-          .filter((entry) => entry.role === 'doctor')
-          .map((entry) => [entry.id, entry.name]),
-      ),
-    [],
-  )
+  const [patient, setPatient] = useState(null);
+  const [appointmentRows, setAppointmentRows] = useState([]);
+  const [prescriptionRows, setPrescriptionRows] = useState([]);
+  const [diagnosisRows, setDiagnosisRows] = useState([]);
+  const [doctors, setDoctors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const [activeTab, setActiveTab] = useState('appointments')
-  const [prescriptionRows, setPrescriptionRows] = useState(() =>
-    prescriptions.filter((entry) => entry.patient_id === patientId),
-  )
-  const [diagnosisRows, setDiagnosisRows] = useState(() =>
-    diagnosisLogs.filter((entry) => entry.patient_id === patientId),
-  )
+  const [activeTab, setActiveTab] = useState("appointments");
   const [prescriptionForm, setPrescriptionForm] = useState({
-    medicines: '',
-    dosage: '',
-    notes: '',
-  })
+    medicines: "",
+    dosage: "",
+    notes: "",
+  });
   const [diagnosisForm, setDiagnosisForm] = useState({
-    symptoms: '',
-    diagnosis: '',
-  })
+    symptoms: "",
+    diagnosis: "",
+  });
+  const [submitting, setSubmitting] = useState(false);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const [
+        patientData,
+        appointmentsData,
+        prescriptionsData,
+        diagnosisData,
+        doctorsData,
+      ] = await Promise.all([
+        getPatientById(patientId),
+        getAppointmentsByPatient(patientId),
+        getPrescriptionsByPatient(patientId),
+        getDiagnosisByPatient(patientId),
+        getAllDoctors(),
+      ]);
+      setPatient(patientData);
+      setAppointmentRows(appointmentsData);
+      setPrescriptionRows(prescriptionsData);
+      setDiagnosisRows(diagnosisData);
+      setDoctors(doctorsData);
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "Failed to load patient data. Please try again.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [patientId]);
+
+  const doctorMap = useMemo(
+    () => Object.fromEntries(doctors.map((entry) => [entry.id, entry.name])),
+    [doctors],
+  );
+
+  if (loading) return <LoadingSpinner />;
+  if (error)
+    return (
+      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700 shadow-sm">
+        {error}
+      </div>
+    );
 
   if (!patient) {
     return (
       <div className="rounded-2xl border border-blue-100 bg-white p-6 text-sm text-slate-700 shadow-sm">
         Patient record not found for ID: {id}
       </div>
-    )
+    );
   }
-
-  const appointmentRows = appointments.filter((entry) => entry.patient_id === patientId)
 
   const appointmentColumns = [
     {
-      key: 'date',
-      label: 'Date',
+      key: "date",
+      label: "Date",
       render: (row) => formatDate(row.date),
     },
-    { key: 'time', label: 'Time' },
+    { key: "time", label: "Time" },
     {
-      key: 'doctor',
-      label: 'Doctor Name',
-      render: (row) => doctorMap[row.doctor_id] || 'Unknown Doctor',
+      key: "doctor",
+      label: "Doctor Name",
+      render: (row) => doctorMap[row.doctor_id] || "Unknown Doctor",
     },
     {
-      key: 'status',
-      label: 'Status',
+      key: "status",
+      label: "Status",
       render: (row) => <StatusBadge status={row.status} />,
     },
-  ]
+  ];
 
   const prescriptionColumns = [
     {
-      key: 'doctor',
-      label: 'Doctor Name',
-      render: (row) => doctorMap[row.doctor_id] || 'Unknown Doctor',
+      key: "doctor",
+      label: "Doctor Name",
+      render: (row) => doctorMap[row.doctor_id] || "Unknown Doctor",
     },
-    { key: 'medicines', label: 'Medicines' },
-    { key: 'dosage', label: 'Dosage' },
-    { key: 'notes', label: 'Notes' },
+    { key: "medicines", label: "Medicines" },
+    { key: "dosage", label: "Dosage" },
+    { key: "notes", label: "Notes" },
     {
-      key: 'date',
-      label: 'Date',
+      key: "date",
+      label: "Date",
       render: (row) => formatDateTime(row.created_at),
     },
-  ]
+  ];
 
   const diagnosisColumns = [
     {
-      key: 'doctor',
-      label: 'Doctor Name',
-      render: (row) => doctorMap[row.doctor_id] || 'Unknown Doctor',
+      key: "doctor",
+      label: "Doctor Name",
+      render: (row) => doctorMap[row.doctor_id] || "Unknown Doctor",
     },
-    { key: 'symptoms', label: 'Symptoms' },
-    { key: 'diagnosis', label: 'Diagnosis' },
+    { key: "symptoms", label: "Symptoms" },
+    { key: "diagnosis", label: "Diagnosis" },
     {
-      key: 'date',
-      label: 'Date',
+      key: "date",
+      label: "Date",
       render: (row) => formatDateTime(row.created_at),
     },
-  ]
+  ];
 
-  const handlePrescriptionSubmit = (event) => {
-    event.preventDefault()
-    const timestamp = new Date().toISOString()
-    const nextId = prescriptionRows.length
-      ? Math.max(...prescriptionRows.map((entry) => entry.id)) + 1
-      : 1
-
-    setPrescriptionRows((previous) => [
-      ...previous,
-      {
-        id: nextId,
+  const handlePrescriptionSubmit = async (event) => {
+    event.preventDefault();
+    try {
+      setSubmitting(true);
+      await createPrescription({
         patient_id: patientId,
-        doctor_id: CURRENT_SESSION.doctorId,
+        doctor_id: getLoggedInUser()?.id,
         medicines: prescriptionForm.medicines,
         dosage: prescriptionForm.dosage,
         notes: prescriptionForm.notes,
-        created_at: timestamp,
-        updated_at: timestamp,
-      },
-    ])
+      });
+      setPrescriptionForm({ medicines: "", dosage: "", notes: "" });
+      await fetchData();
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "Failed to create prescription. Please try again.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-    setPrescriptionForm({
-      medicines: '',
-      dosage: '',
-      notes: '',
-    })
-  }
-
-  const handleDiagnosisSubmit = (event) => {
-    event.preventDefault()
-    const timestamp = new Date().toISOString()
-    const nextId = diagnosisRows.length
-      ? Math.max(...diagnosisRows.map((entry) => entry.id)) + 1
-      : 1
-
-    setDiagnosisRows((previous) => [
-      ...previous,
-      {
-        id: nextId,
+  const handleDiagnosisSubmit = async (event) => {
+    event.preventDefault();
+    try {
+      setSubmitting(true);
+      await createDiagnosis({
         patient_id: patientId,
-        doctor_id: CURRENT_SESSION.doctorId,
+        doctor_id: getLoggedInUser()?.id,
         symptoms: diagnosisForm.symptoms,
         diagnosis: diagnosisForm.diagnosis,
-        created_at: timestamp,
-        updated_at: timestamp,
-      },
-    ])
-
-    setDiagnosisForm({
-      symptoms: '',
-      diagnosis: '',
-    })
-  }
+      });
+      setDiagnosisForm({ symptoms: "", diagnosis: "" });
+      await fetchData();
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "Failed to create diagnosis. Please try again.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -185,26 +218,36 @@ function PatientProfilePage() {
         </div>
         <dl className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <div>
-            <dt className="text-xs font-semibold uppercase tracking-wide text-blue-700">Name</dt>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+              Name
+            </dt>
             <dd className="mt-1 text-sm text-slate-800">{patient.name}</dd>
           </div>
           <div>
-            <dt className="text-xs font-semibold uppercase tracking-wide text-blue-700">Age</dt>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+              Age
+            </dt>
             <dd className="mt-1 text-sm text-slate-800">{patient.age}</dd>
           </div>
           <div>
-            <dt className="text-xs font-semibold uppercase tracking-wide text-blue-700">Gender</dt>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+              Gender
+            </dt>
             <dd className="mt-1 text-sm text-slate-800">{patient.gender}</dd>
           </div>
           <div>
-            <dt className="text-xs font-semibold uppercase tracking-wide text-blue-700">Contact</dt>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+              Contact
+            </dt>
             <dd className="mt-1 text-sm text-slate-800">{patient.contact}</dd>
           </div>
           <div>
             <dt className="text-xs font-semibold uppercase tracking-wide text-blue-700">
               Blood Group
             </dt>
-            <dd className="mt-1 text-sm text-slate-800">{patient.blood_group}</dd>
+            <dd className="mt-1 text-sm text-slate-800">
+              {patient.blood_group}
+            </dd>
           </div>
         </dl>
       </section>
@@ -212,8 +255,8 @@ function PatientProfilePage() {
       <section className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           {tabs.map((tab) => {
-            const TabIcon = tab.icon
-            const selected = activeTab === tab.key
+            const TabIcon = tab.icon;
+            const selected = activeTab === tab.key;
 
             return (
               <button
@@ -221,22 +264,22 @@ function PatientProfilePage() {
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
                 className={clsx(
-                  'inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition',
+                  "inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition",
                   selected
-                    ? 'border-blue-600 bg-blue-600 text-white'
-                    : 'border-blue-200 bg-white text-blue-700 hover:bg-blue-50',
+                    ? "border-blue-600 bg-blue-600 text-white"
+                    : "border-blue-200 bg-white text-blue-700 hover:bg-blue-50",
                 )}
               >
                 <TabIcon className="h-4 w-4" />
                 {tab.label}
               </button>
-            )
+            );
           })}
         </div>
 
-        {activeTab === 'appointments' ? (
+        {activeTab === "appointments" ? (
           <DataTable
-            loading={loading}
+            loading={false}
             columns={appointmentColumns}
             rows={appointmentRows}
             emptyTitle="No appointment history"
@@ -244,9 +287,9 @@ function PatientProfilePage() {
           />
         ) : null}
 
-        {activeTab === 'prescriptions' ? (
+        {activeTab === "prescriptions" ? (
           <DataTable
-            loading={loading}
+            loading={false}
             columns={prescriptionColumns}
             rows={prescriptionRows}
             emptyTitle="No prescription history"
@@ -254,9 +297,9 @@ function PatientProfilePage() {
           />
         ) : null}
 
-        {activeTab === 'diagnosis' ? (
+        {activeTab === "diagnosis" ? (
           <DataTable
-            loading={loading}
+            loading={false}
             columns={diagnosisColumns}
             rows={diagnosisRows}
             emptyTitle="No diagnosis history"
@@ -270,7 +313,9 @@ function PatientProfilePage() {
           onSubmit={handlePrescriptionSubmit}
           className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm"
         >
-          <h3 className="text-lg font-semibold text-slate-900">Add Prescription</h3>
+          <h3 className="text-lg font-semibold text-slate-900">
+            Add Prescription
+          </h3>
           <div className="mt-4 space-y-4">
             <div>
               <label
@@ -297,7 +342,10 @@ function PatientProfilePage() {
             </div>
 
             <div>
-              <label htmlFor="dosage" className="mb-1.5 block text-sm font-semibold text-slate-700">
+              <label
+                htmlFor="dosage"
+                className="mb-1.5 block text-sm font-semibold text-slate-700"
+              >
                 dosage
               </label>
               <input
@@ -318,7 +366,10 @@ function PatientProfilePage() {
             </div>
 
             <div>
-              <label htmlFor="notes" className="mb-1.5 block text-sm font-semibold text-slate-700">
+              <label
+                htmlFor="notes"
+                className="mb-1.5 block text-sm font-semibold text-slate-700"
+              >
                 notes
               </label>
               <textarea
@@ -350,7 +401,9 @@ function PatientProfilePage() {
           onSubmit={handleDiagnosisSubmit}
           className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm"
         >
-          <h3 className="text-lg font-semibold text-slate-900">Add Diagnosis</h3>
+          <h3 className="text-lg font-semibold text-slate-900">
+            Add Diagnosis
+          </h3>
           <div className="mt-4 space-y-4">
             <div>
               <label
@@ -410,7 +463,7 @@ function PatientProfilePage() {
         </form>
       </section>
     </div>
-  )
+  );
 }
 
-export default PatientProfilePage
+export default PatientProfilePage;
