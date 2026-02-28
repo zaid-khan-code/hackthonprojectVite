@@ -1,0 +1,416 @@
+import clsx from 'clsx'
+import { Activity, CalendarDays, ClipboardList, UserRound } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { useParams } from 'react-router-dom'
+import DataTable from '../../components/ui/DataTable'
+import PageHeader from '../../components/ui/PageHeader'
+import StatusBadge from '../../components/ui/StatusBadge'
+import useSimulatedLoading from '../../hooks/useSimulatedLoading'
+import {
+  CURRENT_SESSION,
+  appointments,
+  diagnosisLogs,
+  patients,
+  prescriptions,
+  users,
+} from '../../data/mockData'
+import { formatDate, formatDateTime } from '../../utils/formatters'
+
+const tabs = [
+  { key: 'appointments', label: 'Appointment History', icon: CalendarDays },
+  { key: 'prescriptions', label: 'Prescription History', icon: ClipboardList },
+  { key: 'diagnosis', label: 'Diagnosis History', icon: Activity },
+]
+
+function PatientProfilePage() {
+  const loading = useSimulatedLoading(350)
+  const { id } = useParams()
+  const patientId = Number(id)
+
+  const patient = patients.find((entry) => entry.id === patientId)
+  const doctorMap = useMemo(
+    () =>
+      Object.fromEntries(
+        users
+          .filter((entry) => entry.role === 'doctor')
+          .map((entry) => [entry.id, entry.name]),
+      ),
+    [],
+  )
+
+  const [activeTab, setActiveTab] = useState('appointments')
+  const [prescriptionRows, setPrescriptionRows] = useState(() =>
+    prescriptions.filter((entry) => entry.patient_id === patientId),
+  )
+  const [diagnosisRows, setDiagnosisRows] = useState(() =>
+    diagnosisLogs.filter((entry) => entry.patient_id === patientId),
+  )
+  const [prescriptionForm, setPrescriptionForm] = useState({
+    medicines: '',
+    dosage: '',
+    notes: '',
+  })
+  const [diagnosisForm, setDiagnosisForm] = useState({
+    symptoms: '',
+    diagnosis: '',
+  })
+
+  if (!patient) {
+    return (
+      <div className="rounded-2xl border border-blue-100 bg-white p-6 text-sm text-slate-700 shadow-sm">
+        Patient record not found for ID: {id}
+      </div>
+    )
+  }
+
+  const appointmentRows = appointments.filter((entry) => entry.patient_id === patientId)
+
+  const appointmentColumns = [
+    {
+      key: 'date',
+      label: 'Date',
+      render: (row) => formatDate(row.date),
+    },
+    { key: 'time', label: 'Time' },
+    {
+      key: 'doctor',
+      label: 'Doctor Name',
+      render: (row) => doctorMap[row.doctor_id] || 'Unknown Doctor',
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (row) => <StatusBadge status={row.status} />,
+    },
+  ]
+
+  const prescriptionColumns = [
+    {
+      key: 'doctor',
+      label: 'Doctor Name',
+      render: (row) => doctorMap[row.doctor_id] || 'Unknown Doctor',
+    },
+    { key: 'medicines', label: 'Medicines' },
+    { key: 'dosage', label: 'Dosage' },
+    { key: 'notes', label: 'Notes' },
+    {
+      key: 'date',
+      label: 'Date',
+      render: (row) => formatDateTime(row.created_at),
+    },
+  ]
+
+  const diagnosisColumns = [
+    {
+      key: 'doctor',
+      label: 'Doctor Name',
+      render: (row) => doctorMap[row.doctor_id] || 'Unknown Doctor',
+    },
+    { key: 'symptoms', label: 'Symptoms' },
+    { key: 'diagnosis', label: 'Diagnosis' },
+    {
+      key: 'date',
+      label: 'Date',
+      render: (row) => formatDateTime(row.created_at),
+    },
+  ]
+
+  const handlePrescriptionSubmit = (event) => {
+    event.preventDefault()
+    const timestamp = new Date().toISOString()
+    const nextId = prescriptionRows.length
+      ? Math.max(...prescriptionRows.map((entry) => entry.id)) + 1
+      : 1
+
+    setPrescriptionRows((previous) => [
+      ...previous,
+      {
+        id: nextId,
+        patient_id: patientId,
+        doctor_id: CURRENT_SESSION.doctorId,
+        medicines: prescriptionForm.medicines,
+        dosage: prescriptionForm.dosage,
+        notes: prescriptionForm.notes,
+        created_at: timestamp,
+        updated_at: timestamp,
+      },
+    ])
+
+    setPrescriptionForm({
+      medicines: '',
+      dosage: '',
+      notes: '',
+    })
+  }
+
+  const handleDiagnosisSubmit = (event) => {
+    event.preventDefault()
+    const timestamp = new Date().toISOString()
+    const nextId = diagnosisRows.length
+      ? Math.max(...diagnosisRows.map((entry) => entry.id)) + 1
+      : 1
+
+    setDiagnosisRows((previous) => [
+      ...previous,
+      {
+        id: nextId,
+        patient_id: patientId,
+        doctor_id: CURRENT_SESSION.doctorId,
+        symptoms: diagnosisForm.symptoms,
+        diagnosis: diagnosisForm.diagnosis,
+        created_at: timestamp,
+        updated_at: timestamp,
+      },
+    ])
+
+    setDiagnosisForm({
+      symptoms: '',
+      diagnosis: '',
+    })
+  }
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Patient Profile"
+        description="Patient overview with appointments, prescriptions, and diagnosis logs."
+      />
+
+      <section className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
+        <div className="mb-4 flex items-center gap-3">
+          <div className="rounded-xl bg-blue-100 p-2.5">
+            <UserRound className="h-5 w-5 text-blue-700" />
+          </div>
+          <h2 className="text-lg font-semibold text-slate-900">Patient Info</h2>
+        </div>
+        <dl className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <div>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-blue-700">Name</dt>
+            <dd className="mt-1 text-sm text-slate-800">{patient.name}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-blue-700">Age</dt>
+            <dd className="mt-1 text-sm text-slate-800">{patient.age}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-blue-700">Gender</dt>
+            <dd className="mt-1 text-sm text-slate-800">{patient.gender}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-blue-700">Contact</dt>
+            <dd className="mt-1 text-sm text-slate-800">{patient.contact}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+              Blood Group
+            </dt>
+            <dd className="mt-1 text-sm text-slate-800">{patient.blood_group}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {tabs.map((tab) => {
+            const TabIcon = tab.icon
+            const selected = activeTab === tab.key
+
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className={clsx(
+                  'inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition',
+                  selected
+                    ? 'border-blue-600 bg-blue-600 text-white'
+                    : 'border-blue-200 bg-white text-blue-700 hover:bg-blue-50',
+                )}
+              >
+                <TabIcon className="h-4 w-4" />
+                {tab.label}
+              </button>
+            )
+          })}
+        </div>
+
+        {activeTab === 'appointments' ? (
+          <DataTable
+            loading={loading}
+            columns={appointmentColumns}
+            rows={appointmentRows}
+            emptyTitle="No appointment history"
+            emptyMessage="This patient has no appointment records yet."
+          />
+        ) : null}
+
+        {activeTab === 'prescriptions' ? (
+          <DataTable
+            loading={loading}
+            columns={prescriptionColumns}
+            rows={prescriptionRows}
+            emptyTitle="No prescription history"
+            emptyMessage="Prescriptions written by doctors will show here."
+          />
+        ) : null}
+
+        {activeTab === 'diagnosis' ? (
+          <DataTable
+            loading={loading}
+            columns={diagnosisColumns}
+            rows={diagnosisRows}
+            emptyTitle="No diagnosis history"
+            emptyMessage="Diagnosis logs for this patient will show here."
+          />
+        ) : null}
+      </section>
+
+      <section className="grid gap-6 lg:grid-cols-2">
+        <form
+          onSubmit={handlePrescriptionSubmit}
+          className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm"
+        >
+          <h3 className="text-lg font-semibold text-slate-900">Add Prescription</h3>
+          <div className="mt-4 space-y-4">
+            <div>
+              <label
+                htmlFor="medicines"
+                className="mb-1.5 block text-sm font-semibold text-slate-700"
+              >
+                medicines
+              </label>
+              <input
+                id="medicines"
+                name="medicines"
+                type="text"
+                value={prescriptionForm.medicines}
+                onChange={(event) =>
+                  setPrescriptionForm((previous) => ({
+                    ...previous,
+                    medicines: event.target.value,
+                  }))
+                }
+                placeholder="medicines"
+                required
+                className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="dosage" className="mb-1.5 block text-sm font-semibold text-slate-700">
+                dosage
+              </label>
+              <input
+                id="dosage"
+                name="dosage"
+                type="text"
+                value={prescriptionForm.dosage}
+                onChange={(event) =>
+                  setPrescriptionForm((previous) => ({
+                    ...previous,
+                    dosage: event.target.value,
+                  }))
+                }
+                placeholder="dosage"
+                required
+                className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="notes" className="mb-1.5 block text-sm font-semibold text-slate-700">
+                notes
+              </label>
+              <textarea
+                id="notes"
+                name="notes"
+                value={prescriptionForm.notes}
+                onChange={(event) =>
+                  setPrescriptionForm((previous) => ({
+                    ...previous,
+                    notes: event.target.value,
+                  }))
+                }
+                placeholder="notes"
+                rows={3}
+                className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="inline-flex w-full justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+            >
+              Submit Prescription
+            </button>
+          </div>
+        </form>
+
+        <form
+          onSubmit={handleDiagnosisSubmit}
+          className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm"
+        >
+          <h3 className="text-lg font-semibold text-slate-900">Add Diagnosis</h3>
+          <div className="mt-4 space-y-4">
+            <div>
+              <label
+                htmlFor="symptoms"
+                className="mb-1.5 block text-sm font-semibold text-slate-700"
+              >
+                symptoms
+              </label>
+              <textarea
+                id="symptoms"
+                name="symptoms"
+                value={diagnosisForm.symptoms}
+                onChange={(event) =>
+                  setDiagnosisForm((previous) => ({
+                    ...previous,
+                    symptoms: event.target.value,
+                  }))
+                }
+                placeholder="symptoms"
+                rows={3}
+                required
+                className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="diagnosis"
+                className="mb-1.5 block text-sm font-semibold text-slate-700"
+              >
+                diagnosis
+              </label>
+              <textarea
+                id="diagnosis"
+                name="diagnosis"
+                value={diagnosisForm.diagnosis}
+                onChange={(event) =>
+                  setDiagnosisForm((previous) => ({
+                    ...previous,
+                    diagnosis: event.target.value,
+                  }))
+                }
+                placeholder="diagnosis"
+                rows={3}
+                required
+                className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="inline-flex w-full justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+            >
+              Submit Diagnosis
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  )
+}
+
+export default PatientProfilePage
