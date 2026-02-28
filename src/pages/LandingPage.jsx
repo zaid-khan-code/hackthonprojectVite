@@ -1,5 +1,4 @@
 import {
-  ArrowRight,
   ClipboardList,
   HeartPulse,
   Shield,
@@ -91,14 +90,6 @@ function LandingPage() {
                 and patients. Track appointments, manage records, and keep
                 clinical data organized in one secure system.
               </p>
-              <button
-                type="button"
-                onClick={() => navigate("/login")}
-                className="mt-6 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
-              >
-                Go to Login
-                <ArrowRight className="h-4 w-4" />
-              </button>
             </div>
             <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-6">
               <h2 className="text-xl font-bold text-slate-900">
