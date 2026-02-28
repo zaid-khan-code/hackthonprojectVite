@@ -1,31 +1,16 @@
-import api from './api'
+import API from './api'
 
-export const getDiagnosisByPatient = async (patientId) => {
-    try {
-        const response = await api.get(`/diagnosis/patient/${patientId}`)
-        return response.data.data
-    } catch (error) {
-        console.error('Error fetching patient diagnosis:', error)
-        throw error
-    }
+export const getDiagnosisByPatient = async (patient_id) => {
+    const response = await API.get(`/diagnosis/patient/${patient_id}`)
+    return response.data
 }
 
 export const getDiagnosisByDoctor = async (doctorId) => {
-    try {
-        const response = await api.get(`/diagnosis/doctor/${doctorId}`)
-        return response.data.data
-    } catch (error) {
-        console.error('Error fetching doctor diagnosis:', error)
-        throw error
-    }
+    const response = await API.get(`/diagnosis/doctor/${doctorId}`)
+    return response.data
 }
 
-export const createDiagnosis = async (diagnosisData) => {
-    try {
-        const response = await api.post('/diagnosis', diagnosisData)
-        return response.data.data
-    } catch (error) {
-        console.error('Error creating diagnosis:', error)
-        throw error
-    }
+export const createDiagnosis = async (data) => {
+    const response = await API.post('/diagnosis', data)
+    return response.data
 }

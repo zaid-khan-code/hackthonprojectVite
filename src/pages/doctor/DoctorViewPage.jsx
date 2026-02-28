@@ -15,12 +15,16 @@ import { getDoctorById } from "../../services/userService";
 import { getAllPatients } from "../../services/patientService";
 import { getAppointmentsByDoctor } from "../../services/appointmentService";
 import { getPrescriptionsByDoctor } from "../../services/prescriptionService";
-import { getDiagnosisByDoctor } from "../../services/diagnosisService";
+import {
+  getDiagnosisByDoctor,
+  createDiagnosis,
+} from "../../services/diagnosisService";
 import { formatDate, formatDateTime } from "../../utils/formatters";
 
 const tabs = [
   { key: "appointments", label: "Appointments", icon: CalendarDays },
   { key: "prescriptions", label: "Prescriptions", icon: ClipboardList },
+  { key: "diagnosis", label: "Diagnosis History", icon: Activity },
   { key: "analytics", label: "Analytics", icon: Activity },
 ];
 
@@ -44,6 +48,16 @@ function DoctorViewPage() {
 
   const [diagnosisRows, setDiagnosisRows] = useState([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  const [diagnosisLoading, setDiagnosisLoading] = useState(true);
+
+  const [diagnosisForm, setDiagnosisForm] = useState({
+    patient_id: "",
+    symptoms: "",
+    diagnosis: "",
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(null);
+  const [submitError, setSubmitError] = useState(null);
 
   useEffect(() => {
     const fetchDoctor = async () => {
@@ -102,16 +116,32 @@ function DoctorViewPage() {
     const fetchDiagnosis = async () => {
       try {
         setAnalyticsLoading(true);
+        setDiagnosisLoading(true);
         const data = await getDiagnosisByDoctor(doctorId);
-        setDiagnosisRows(data);
+        const rows = Array.isArray(data) ? data : data?.data || [];
+        setDiagnosisRows(rows);
       } catch {
         setDiagnosisRows([]);
       } finally {
         setAnalyticsLoading(false);
+        setDiagnosisLoading(false);
       }
     };
     fetchDiagnosis();
   }, [doctorId]);
+
+  const fetchDiagnosisRefresh = async () => {
+    try {
+      setDiagnosisLoading(true);
+      const data = await getDiagnosisByDoctor(doctorId);
+      const rows = Array.isArray(data) ? data : data?.data || [];
+      setDiagnosisRows(rows);
+    } catch {
+      setDiagnosisRows([]);
+    } finally {
+      setDiagnosisLoading(false);
+    }
+  };
 
   const patientMap = useMemo(
     () => Object.fromEntries(patients.map((entry) => [entry.id, entry.name])),
@@ -192,6 +222,54 @@ function DoctorViewPage() {
       render: (row) => formatDateTime(row.created_at),
     },
   ];
+
+  const diagnosisColumns = [
+    {
+      key: "patient",
+      label: "Patient Name",
+      render: (row) =>
+        row.patient_name || patientMap[row.patient_id] || "Unknown Patient",
+    },
+    { key: "symptoms", label: "Symptoms" },
+    { key: "diagnosis", label: "Diagnosis" },
+    {
+      key: "date",
+      label: "Date",
+      render: (row) => formatDateTime(row.created_at),
+    },
+  ];
+
+  const handleDiagnosisChange = (event) => {
+    setDiagnosisForm((prev) => ({
+      ...prev,
+      [event.target.name]: event.target.value,
+    }));
+  };
+
+  const handleDiagnosisSubmit = async (event) => {
+    event.preventDefault();
+    try {
+      setSubmitting(true);
+      setSubmitError(null);
+      setSubmitSuccess(null);
+      await createDiagnosis({
+        patient_id: Number(diagnosisForm.patient_id),
+        doctor_id: doctorId,
+        symptoms: diagnosisForm.symptoms,
+        diagnosis: diagnosisForm.diagnosis,
+      });
+      setDiagnosisForm({ patient_id: "", symptoms: "", diagnosis: "" });
+      setSubmitSuccess("Diagnosis added successfully");
+      await fetchDiagnosisRefresh();
+    } catch (err) {
+      setSubmitError(
+        err.response?.data?.message ||
+          "Failed to add diagnosis. Please try again.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_right,_#bfdbfe_0,_#eff6ff_35%,_#f8fbff_100%)] px-4 py-10 sm:px-6">
@@ -290,6 +368,20 @@ function DoctorViewPage() {
             )
           ) : null}
 
+          {activeTab === "diagnosis" ? (
+            diagnosisLoading ? (
+              <LoadingSpinner />
+            ) : (
+              <DataTable
+                loading={false}
+                columns={diagnosisColumns}
+                rows={diagnosisRows}
+                emptyTitle="No diagnosis found"
+                emptyMessage="This doctor has no diagnosis records yet."
+              />
+            )
+          ) : null}
+
           {activeTab === "analytics" ? (
             analyticsLoading || appointmentsLoading || prescriptionsLoading ? (
               <LoadingSpinner />
@@ -324,6 +416,97 @@ function DoctorViewPage() {
             )
           ) : null}
         </section>
+
+        {activeTab === "diagnosis" && (
+          <section className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
+            <h3 className="text-lg font-semibold text-slate-900">
+              Add Diagnosis
+            </h3>
+
+            {submitSuccess && (
+              <div className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+                {submitSuccess}
+              </div>
+            )}
+            {submitError && (
+              <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                {submitError}
+              </div>
+            )}
+
+            <form onSubmit={handleDiagnosisSubmit} className="mt-4 space-y-4">
+              <div>
+                <label
+                  htmlFor="patient_id"
+                  className="mb-1.5 block text-sm font-semibold text-slate-700"
+                >
+                  patient
+                </label>
+                <select
+                  id="patient_id"
+                  name="patient_id"
+                  value={diagnosisForm.patient_id}
+                  onChange={handleDiagnosisChange}
+                  required
+                  className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                >
+                  <option value="">Select patient</option>
+                  {patients.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="symptoms"
+                  className="mb-1.5 block text-sm font-semibold text-slate-700"
+                >
+                  symptoms
+                </label>
+                <textarea
+                  id="symptoms"
+                  name="symptoms"
+                  value={diagnosisForm.symptoms}
+                  onChange={handleDiagnosisChange}
+                  placeholder="symptoms"
+                  rows={3}
+                  required
+                  className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="diagnosis"
+                  className="mb-1.5 block text-sm font-semibold text-slate-700"
+                >
+                  diagnosis
+                </label>
+                <textarea
+                  id="diagnosis"
+                  name="diagnosis"
+                  value={diagnosisForm.diagnosis}
+                  onChange={handleDiagnosisChange}
+                  placeholder="diagnosis"
+                  rows={3}
+                  required
+                  className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="inline-flex w-full justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+              >
+                {submitting ? "Submitting..." : "Submit Diagnosis"}
+              </button>
+            </form>
+          </section>
+        )}
       </div>
     </div>
   );
