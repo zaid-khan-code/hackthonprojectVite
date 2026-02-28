@@ -10,14 +10,12 @@ import {
   updateUser,
   deleteUser,
 } from "../../services/userService";
-import { getAllRoles } from "../../services/roleService";
 import { formatDateTime } from "../../utils/formatters";
 
 const initialForm = {
   name: "",
   email: "",
   password: "",
-  role_id: "",
 };
 
 function ManageReceptionistsPage() {
@@ -28,8 +26,6 @@ function ManageReceptionistsPage() {
   const [editingReceptionistId, setEditingReceptionistId] = useState(null);
   const [formData, setFormData] = useState(initialForm);
   const [submitting, setSubmitting] = useState(false);
-  const [roles, setRoles] = useState([]);
-  const [rolesLoading, setRolesLoading] = useState(true);
 
   const modalTitle = useMemo(
     () => (editingReceptionistId ? "Edit Receptionist" : "Add Receptionist"),
@@ -54,18 +50,6 @@ function ManageReceptionistsPage() {
 
   useEffect(() => {
     fetchReceptionists();
-    const fetchRoles = async () => {
-      try {
-        setRolesLoading(true);
-        const data = await getAllRoles();
-        setRoles(data);
-      } catch (err) {
-        console.error("Failed to load roles", err);
-      } finally {
-        setRolesLoading(false);
-      }
-    };
-    fetchRoles();
   }, []);
 
   const handleInputChange = (event) => {
@@ -91,7 +75,6 @@ function ManageReceptionistsPage() {
       name: receptionist.name,
       email: receptionist.email,
       password: "",
-      role_id: receptionist.role_id || "",
     });
     setIsModalOpen(true);
   };
@@ -126,7 +109,7 @@ function ManageReceptionistsPage() {
           name: formData.name,
           email: formData.email,
           password: formData.password,
-          role_id: Number(formData.role_id),
+          role_id: 3,
         });
       }
       setIsModalOpen(false);
@@ -283,26 +266,13 @@ function ManageReceptionistsPage() {
             >
               role
             </label>
-            {rolesLoading ? (
-              <p className="text-sm text-slate-500">Loading roles...</p>
-            ) : (
-              <select
-                id="role_id"
-                name="role_id"
-                value={formData.role_id}
-                onChange={handleInputChange}
-                required={!editingReceptionistId}
-                disabled={!!editingReceptionistId}
-                className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-              >
-                <option value="">Select role</option>
-                {roles.map((role) => (
-                  <option key={role.id} value={role.id}>
-                    {role.name}
-                  </option>
-                ))}
-              </select>
-            )}
+            <input
+              id="role_id"
+              type="text"
+              value="Receptionist"
+              disabled
+              className="w-full rounded-xl border border-blue-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500 outline-none"
+            />
           </div>
 
           <div className="pt-2">

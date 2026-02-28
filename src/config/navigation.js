@@ -4,6 +4,7 @@ import {
   ClipboardList,
   Home,
   Stethoscope,
+  UserRound,
   Users,
 } from 'lucide-react'
 
@@ -25,6 +26,12 @@ export const adminNavItems = [
     to: '/admin/receptionists',
     icon: Users,
     matchPrefixes: ['/admin/receptionists'],
+  },
+  {
+    label: 'Patients',
+    to: '/admin/patients',
+    icon: UserRound,
+    matchPrefixes: ['/admin/patients'],
   },
 ]
 
