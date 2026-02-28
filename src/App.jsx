@@ -13,12 +13,14 @@ import ManageReceptionistsPage from "./pages/admin/ManageReceptionistsPage";
 import DoctorAnalyticsPage from "./pages/doctor/DoctorAnalyticsPage";
 import DoctorAppointmentsPage from "./pages/doctor/DoctorAppointmentsPage";
 import DoctorDashboardPage from "./pages/doctor/DoctorDashboardPage";
+import DoctorViewPage from "./pages/doctor/DoctorViewPage";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import MyAppointmentsPage from "./pages/patient/MyAppointmentsPage";
 import MyPrescriptionsPage from "./pages/patient/MyPrescriptionsPage";
 import PatientDashboardPage from "./pages/patient/PatientDashboardPage";
 import PatientProfilePage from "./pages/patient/PatientProfilePage";
+import PatientViewPage from "./pages/patient/PatientViewPage";
 import AppointmentsPage from "./pages/receptionist/AppointmentsPage";
 import PatientsPage from "./pages/receptionist/PatientsPage";
 import ReceptionistDashboardPage from "./pages/receptionist/ReceptionistDashboardPage";
@@ -29,6 +31,8 @@ function App() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/patient/view/:id" element={<PatientViewPage />} />
+      <Route path="/doctor/view/:id" element={<DoctorViewPage />} />
 
       <Route
         element={
