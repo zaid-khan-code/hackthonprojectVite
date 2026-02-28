@@ -26,6 +26,7 @@ function ManageReceptionistsPage() {
   const [editingReceptionistId, setEditingReceptionistId] = useState(null);
   const [formData, setFormData] = useState(initialForm);
   const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
   const modalTitle = useMemo(
     () => (editingReceptionistId ? "Edit Receptionist" : "Add Receptionist"),
@@ -80,7 +81,10 @@ function ManageReceptionistsPage() {
   };
 
   const handleDelete = async (receptionistId) => {
+    if (!window.confirm("Are you sure you want to delete this receptionist?"))
+      return;
     try {
+      setDeletingId(receptionistId);
       await deleteUser(receptionistId);
       await fetchReceptionists();
     } catch (err) {
@@ -88,6 +92,8 @@ function ManageReceptionistsPage() {
         err.response?.data?.message ||
           "Failed to delete receptionist. Please try again.",
       );
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -156,9 +162,17 @@ function ManageReceptionistsPage() {
           <button
             type="button"
             onClick={() => handleDelete(row.id)}
-            className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
+            disabled={deletingId === row.id}
+            className={`rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 transition ${deletingId === row.id ? "opacity-50 cursor-not-allowed" : "hover:bg-rose-50"}`}
           >
-            Delete
+            {deletingId === row.id ? (
+              <span className="flex items-center gap-1">
+                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-rose-700"></div>
+                Deleting...
+              </span>
+            ) : (
+              "Delete"
+            )}
           </button>
         </div>
       ),
@@ -202,89 +216,99 @@ function ManageReceptionistsPage() {
         onClose={() => setIsModalOpen(false)}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label
-              htmlFor="name"
-              className="mb-1.5 block text-sm font-semibold text-slate-700"
-            >
-              name
-            </label>
-            <input
-              id="name"
-              name="name"
-              type="text"
-              value={formData.name}
-              onChange={handleInputChange}
-              placeholder="name"
-              required
-              className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-          </div>
+          <fieldset disabled={submitting} className="space-y-4">
+            <div>
+              <label
+                htmlFor="name"
+                className="mb-1.5 block text-sm font-semibold text-slate-700"
+              >
+                name
+              </label>
+              <input
+                id="name"
+                name="name"
+                type="text"
+                value={formData.name}
+                onChange={handleInputChange}
+                placeholder="name"
+                required
+                className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
 
-          <div>
-            <label
-              htmlFor="email"
-              className="mb-1.5 block text-sm font-semibold text-slate-700"
-            >
-              email
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              value={formData.email}
-              onChange={handleInputChange}
-              placeholder="email"
-              required
-              className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-          </div>
+            <div>
+              <label
+                htmlFor="email"
+                className="mb-1.5 block text-sm font-semibold text-slate-700"
+              >
+                email
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                value={formData.email}
+                onChange={handleInputChange}
+                placeholder="email"
+                required
+                className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
 
-          <div>
-            <label
-              htmlFor="password"
-              className="mb-1.5 block text-sm font-semibold text-slate-700"
-            >
-              password
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              value={formData.password}
-              onChange={handleInputChange}
-              placeholder="password"
-              required={!editingReceptionistId}
-              className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-          </div>
+            <div>
+              <label
+                htmlFor="password"
+                className="mb-1.5 block text-sm font-semibold text-slate-700"
+              >
+                password
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                value={formData.password}
+                onChange={handleInputChange}
+                placeholder="password"
+                required={!editingReceptionistId}
+                className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
 
-          <div>
-            <label
-              htmlFor="role_id"
-              className="mb-1.5 block text-sm font-semibold text-slate-700"
-            >
-              role
-            </label>
-            <input
-              id="role_id"
-              type="text"
-              value="Receptionist"
-              disabled
-              className="w-full rounded-xl border border-blue-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500 outline-none"
-            />
-          </div>
+            <div>
+              <label
+                htmlFor="role_id"
+                className="mb-1.5 block text-sm font-semibold text-slate-700"
+              >
+                role
+              </label>
+              <input
+                id="role_id"
+                type="text"
+                value="Receptionist"
+                disabled
+                className="w-full rounded-xl border border-blue-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500 outline-none"
+              />
+            </div>
 
-          <div className="pt-2">
-            <button
-              type="submit"
-              className="inline-flex w-full justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
-            >
-              {editingReceptionistId
-                ? "Update Receptionist"
-                : "Create Receptionist"}
-            </button>
-          </div>
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={submitting}
+                className={`inline-flex w-full justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition ${submitting ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-700"}`}
+              >
+                {submitting ? (
+                  <span className="flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    {editingReceptionistId ? "Updating..." : "Adding..."}
+                  </span>
+                ) : editingReceptionistId ? (
+                  "Update Receptionist"
+                ) : (
+                  "Create Receptionist"
+                )}
+              </button>
+            </div>
+          </fieldset>
         </form>
       </Modal>
     </div>

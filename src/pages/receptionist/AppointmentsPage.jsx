@@ -29,6 +29,8 @@ function AppointmentsPage() {
   const [error, setError] = useState(null);
   const [formData, setFormData] = useState(initialForm);
   const [submitting, setSubmitting] = useState(false);
+  const [cancellingId, setCancellingId] = useState(null);
+  const [updatingStatusId, setUpdatingStatusId] = useState(null);
 
   const fetchData = async () => {
     try {
@@ -96,7 +98,10 @@ function AppointmentsPage() {
   };
 
   const handleCancel = async (appointmentId) => {
+    if (!window.confirm("Are you sure you want to cancel this appointment?"))
+      return;
     try {
+      setCancellingId(appointmentId);
       await cancelAppointment(appointmentId);
       await fetchData();
     } catch (err) {
@@ -104,11 +109,14 @@ function AppointmentsPage() {
         err.response?.data?.message ||
           "Failed to cancel appointment. Please try again.",
       );
+    } finally {
+      setCancellingId(null);
     }
   };
 
   const handleStatusChange = async (appointmentId, status) => {
     try {
+      setUpdatingStatusId(appointmentId);
       await updateAppointmentStatus(appointmentId, status);
       await fetchData();
     } catch (err) {
@@ -116,6 +124,8 @@ function AppointmentsPage() {
         err.response?.data?.message ||
           "Failed to update appointment status. Please try again.",
       );
+    } finally {
+      setUpdatingStatusId(null);
     }
   };
 
@@ -157,16 +167,27 @@ function AppointmentsPage() {
           <button
             type="button"
             onClick={() => handleCancel(row.id)}
-            className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={row.status === "completed" || row.status === "cancelled"}
+            className={`rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 transition ${cancellingId === row.id ? "opacity-50 cursor-not-allowed" : "hover:bg-rose-50"} disabled:cursor-not-allowed disabled:opacity-50`}
+            disabled={
+              row.status === "completed" ||
+              row.status === "cancelled" ||
+              cancellingId === row.id
+            }
           >
-            Cancel
+            {cancellingId === row.id ? (
+              <span className="flex items-center gap-1">
+                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-rose-700"></div>
+                Cancelling...
+              </span>
+            ) : (
+              "Cancel"
+            )}
           </button>
           <select
             value={row.status === "cancelled" ? "pending" : row.status}
             onChange={(event) => handleStatusChange(row.id, event.target.value)}
-            disabled={row.status === "cancelled"}
-            className="rounded-lg border border-blue-200 bg-white px-2 py-1.5 text-xs font-semibold text-blue-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={row.status === "cancelled" || updatingStatusId === row.id}
+            className={`rounded-lg border border-blue-200 bg-white px-2 py-1.5 text-xs font-semibold text-blue-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50`}
           >
             <option value="pending">pending</option>
             <option value="confirmed">confirmed</option>
@@ -192,116 +213,126 @@ function AppointmentsPage() {
           onSubmit={handleBookingSubmit}
           className="mt-4 grid gap-4 md:grid-cols-2"
         >
-          <div>
-            <label
-              htmlFor="patient_id"
-              className="mb-1.5 block text-sm font-semibold text-slate-700"
-            >
-              Select Patient
-            </label>
-            <select
-              id="patient_id"
-              name="patient_id"
-              value={formData.patient_id}
-              onChange={handleInputChange}
-              required
-              className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            >
-              <option value="">Select patient</option>
-              {patients.map((entry) => (
-                <option key={entry.id} value={entry.id}>
-                  {entry.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <fieldset disabled={submitting} className="contents">
+            <div>
+              <label
+                htmlFor="patient_id"
+                className="mb-1.5 block text-sm font-semibold text-slate-700"
+              >
+                Select Patient
+              </label>
+              <select
+                id="patient_id"
+                name="patient_id"
+                value={formData.patient_id}
+                onChange={handleInputChange}
+                required
+                className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="">Select patient</option>
+                {patients.map((entry) => (
+                  <option key={entry.id} value={entry.id}>
+                    {entry.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <div>
-            <label
-              htmlFor="doctor_id"
-              className="mb-1.5 block text-sm font-semibold text-slate-700"
-            >
-              Select Doctor
-            </label>
-            <select
-              id="doctor_id"
-              name="doctor_id"
-              value={formData.doctor_id}
-              onChange={handleInputChange}
-              required
-              className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            >
-              <option value="">Select doctor</option>
-              {doctors.map((entry) => (
-                <option key={entry.id} value={entry.id}>
-                  {entry.name}
-                </option>
-              ))}
-            </select>
-          </div>
+            <div>
+              <label
+                htmlFor="doctor_id"
+                className="mb-1.5 block text-sm font-semibold text-slate-700"
+              >
+                Select Doctor
+              </label>
+              <select
+                id="doctor_id"
+                name="doctor_id"
+                value={formData.doctor_id}
+                onChange={handleInputChange}
+                required
+                className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="">Select doctor</option>
+                {doctors.map((entry) => (
+                  <option key={entry.id} value={entry.id}>
+                    {entry.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <div>
-            <label
-              htmlFor="date"
-              className="mb-1.5 block text-sm font-semibold text-slate-700"
-            >
-              date
-            </label>
-            <input
-              id="date"
-              name="date"
-              type="date"
-              value={formData.date}
-              onChange={handleInputChange}
-              required
-              className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-          </div>
+            <div>
+              <label
+                htmlFor="date"
+                className="mb-1.5 block text-sm font-semibold text-slate-700"
+              >
+                date
+              </label>
+              <input
+                id="date"
+                name="date"
+                type="date"
+                value={formData.date}
+                onChange={handleInputChange}
+                required
+                className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
 
-          <div>
-            <label
-              htmlFor="time"
-              className="mb-1.5 block text-sm font-semibold text-slate-700"
-            >
-              time
-            </label>
-            <input
-              id="time"
-              name="time"
-              type="time"
-              value={formData.time}
-              onChange={handleInputChange}
-              required
-              className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-          </div>
+            <div>
+              <label
+                htmlFor="time"
+                className="mb-1.5 block text-sm font-semibold text-slate-700"
+              >
+                time
+              </label>
+              <input
+                id="time"
+                name="time"
+                type="time"
+                value={formData.time}
+                onChange={handleInputChange}
+                required
+                className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
 
-          <div className="md:col-span-2">
-            <label
-              htmlFor="notes"
-              className="mb-1.5 block text-sm font-semibold text-slate-700"
-            >
-              notes
-            </label>
-            <textarea
-              id="notes"
-              name="notes"
-              value={formData.notes}
-              onChange={handleInputChange}
-              placeholder="notes"
-              rows={3}
-              className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-          </div>
+            <div className="md:col-span-2">
+              <label
+                htmlFor="notes"
+                className="mb-1.5 block text-sm font-semibold text-slate-700"
+              >
+                notes
+              </label>
+              <textarea
+                id="notes"
+                name="notes"
+                value={formData.notes}
+                onChange={handleInputChange}
+                placeholder="notes"
+                rows={3}
+                className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
 
-          <div className="md:col-span-2">
-            <button
-              type="submit"
-              className="inline-flex rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
-            >
-              Book Appointment
-            </button>
-          </div>
+            <div className="md:col-span-2">
+              <button
+                type="submit"
+                disabled={submitting}
+                className={`inline-flex rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition ${submitting ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-700"}`}
+              >
+                {submitting ? (
+                  <span className="flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Booking...
+                  </span>
+                ) : (
+                  "Book Appointment"
+                )}
+              </button>
+            </div>
+          </fieldset>
         </form>
       </section>
 

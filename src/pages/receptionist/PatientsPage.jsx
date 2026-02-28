@@ -30,6 +30,7 @@ function PatientsPage() {
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [formData, setFormData] = useState(initialForm);
   const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
   const modalTitle = useMemo(
     () => (editingPatientId ? "Edit Patient" : "Add Patient"),
@@ -92,7 +93,10 @@ function PatientsPage() {
   };
 
   const handleDelete = async (patientId) => {
+    if (!window.confirm("Are you sure you want to delete this patient?"))
+      return;
     try {
+      setDeletingId(patientId);
       await deletePatient(patientId);
       await fetchPatients();
     } catch (err) {
@@ -100,6 +104,8 @@ function PatientsPage() {
         err.response?.data?.message ||
           "Failed to delete patient. Please try again.",
       );
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -186,9 +192,17 @@ function PatientsPage() {
           <button
             type="button"
             onClick={() => handleDelete(row.id)}
-            className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
+            disabled={deletingId === row.id}
+            className={`rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 transition ${deletingId === row.id ? "opacity-50 cursor-not-allowed" : "hover:bg-rose-50"}`}
           >
-            Delete
+            {deletingId === row.id ? (
+              <span className="flex items-center gap-1">
+                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-rose-700"></div>
+                Deleting...
+              </span>
+            ) : (
+              "Delete"
+            )}
           </button>
         </div>
       ),
@@ -232,40 +246,81 @@ function PatientsPage() {
         onClose={() => setIsFormModalOpen(false)}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label
-              htmlFor="name"
-              className="mb-1.5 block text-sm font-semibold text-slate-700"
-            >
-              name
-            </label>
-            <input
-              id="name"
-              name="name"
-              type="text"
-              value={formData.name}
-              onChange={handleInputChange}
-              placeholder="name"
-              required
-              className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
+          <fieldset disabled={submitting} className="space-y-4">
             <div>
               <label
-                htmlFor="age"
+                htmlFor="name"
                 className="mb-1.5 block text-sm font-semibold text-slate-700"
               >
-                age
+                name
               </label>
               <input
-                id="age"
-                name="age"
-                type="number"
-                value={formData.age}
+                id="name"
+                name="name"
+                type="text"
+                value={formData.name}
                 onChange={handleInputChange}
-                placeholder="age"
+                placeholder="name"
+                required
+                className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="age"
+                  className="mb-1.5 block text-sm font-semibold text-slate-700"
+                >
+                  age
+                </label>
+                <input
+                  id="age"
+                  name="age"
+                  type="number"
+                  value={formData.age}
+                  onChange={handleInputChange}
+                  placeholder="age"
+                  required
+                  className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="gender"
+                  className="mb-1.5 block text-sm font-semibold text-slate-700"
+                >
+                  gender
+                </label>
+                <select
+                  id="gender"
+                  name="gender"
+                  value={formData.gender}
+                  onChange={handleInputChange}
+                  className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                >
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label
+                htmlFor="contact"
+                className="mb-1.5 block text-sm font-semibold text-slate-700"
+              >
+                contact
+              </label>
+              <input
+                id="contact"
+                name="contact"
+                type="text"
+                value={formData.contact}
+                onChange={handleInputChange}
+                placeholder="contact"
                 required
                 className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
@@ -273,69 +328,40 @@ function PatientsPage() {
 
             <div>
               <label
-                htmlFor="gender"
+                htmlFor="blood_group"
                 className="mb-1.5 block text-sm font-semibold text-slate-700"
               >
-                gender
+                blood_group
               </label>
-              <select
-                id="gender"
-                name="gender"
-                value={formData.gender}
+              <input
+                id="blood_group"
+                name="blood_group"
+                type="text"
+                value={formData.blood_group}
                 onChange={handleInputChange}
+                placeholder="blood_group"
+                required
                 className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-              >
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-                <option value="other">Other</option>
-              </select>
+              />
             </div>
-          </div>
 
-          <div>
-            <label
-              htmlFor="contact"
-              className="mb-1.5 block text-sm font-semibold text-slate-700"
+            <button
+              type="submit"
+              disabled={submitting}
+              className={`inline-flex w-full justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition ${submitting ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-700"}`}
             >
-              contact
-            </label>
-            <input
-              id="contact"
-              name="contact"
-              type="text"
-              value={formData.contact}
-              onChange={handleInputChange}
-              placeholder="contact"
-              required
-              className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="blood_group"
-              className="mb-1.5 block text-sm font-semibold text-slate-700"
-            >
-              blood_group
-            </label>
-            <input
-              id="blood_group"
-              name="blood_group"
-              type="text"
-              value={formData.blood_group}
-              onChange={handleInputChange}
-              placeholder="blood_group"
-              required
-              className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="inline-flex w-full justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
-          >
-            {editingPatientId ? "Update Patient" : "Create Patient"}
-          </button>
+              {submitting ? (
+                <span className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  {editingPatientId ? "Updating..." : "Adding..."}
+                </span>
+              ) : editingPatientId ? (
+                "Update Patient"
+              ) : (
+                "Create Patient"
+              )}
+            </button>
+          </fieldset>
         </form>
       </Modal>
 

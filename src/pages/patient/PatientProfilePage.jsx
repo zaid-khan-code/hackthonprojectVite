@@ -6,7 +6,6 @@ import DataTable from "../../components/ui/DataTable";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import PageHeader from "../../components/ui/PageHeader";
 import StatusBadge from "../../components/ui/StatusBadge";
-import { getLoggedInUser } from "../../services/authService";
 import { getPatientById } from "../../services/patientService";
 import { getAppointmentsByPatient } from "../../services/appointmentService";
 import {
@@ -40,15 +39,22 @@ function PatientProfilePage() {
 
   const [activeTab, setActiveTab] = useState("appointments");
   const [prescriptionForm, setPrescriptionForm] = useState({
+    doctor_id: "",
     medicines: "",
     dosage: "",
     notes: "",
   });
   const [diagnosisForm, setDiagnosisForm] = useState({
+    doctor_id: "",
     symptoms: "",
     diagnosis: "",
   });
   const [submitting, setSubmitting] = useState(false);
+  const [prescriptionSuccess, setPrescriptionSuccess] = useState(null);
+  const [prescriptionError, setPrescriptionError] = useState(null);
+  const [diagnosisSubmitting, setDiagnosisSubmitting] = useState(false);
+  const [diagnosisSuccess, setDiagnosisSuccess] = useState(null);
+  const [diagnosisError, setDiagnosisError] = useState(null);
 
   const fetchData = async () => {
     try {
@@ -130,7 +136,8 @@ function PatientProfilePage() {
     {
       key: "doctor",
       label: "Doctor Name",
-      render: (row) => doctorMap[row.doctor_id] || "Unknown Doctor",
+      render: (row) =>
+        row.doctor_name || doctorMap[row.doctor_id] || "Unknown Doctor",
     },
     { key: "medicines", label: "Medicines" },
     { key: "dosage", label: "Dosage" },
@@ -161,17 +168,25 @@ function PatientProfilePage() {
     event.preventDefault();
     try {
       setSubmitting(true);
+      setPrescriptionError(null);
+      setPrescriptionSuccess(null);
       await createPrescription({
         patient_id: patientId,
-        doctor_id: getLoggedInUser()?.id,
+        doctor_id: Number(prescriptionForm.doctor_id),
         medicines: prescriptionForm.medicines,
         dosage: prescriptionForm.dosage,
-        notes: prescriptionForm.notes,
+        notes: prescriptionForm.notes || null,
       });
-      setPrescriptionForm({ medicines: "", dosage: "", notes: "" });
+      setPrescriptionForm({
+        doctor_id: "",
+        medicines: "",
+        dosage: "",
+        notes: "",
+      });
+      setPrescriptionSuccess("Prescription added successfully");
       await fetchData();
     } catch (err) {
-      setError(
+      setPrescriptionError(
         err.response?.data?.message ||
           "Failed to create prescription. Please try again.",
       );
@@ -183,22 +198,25 @@ function PatientProfilePage() {
   const handleDiagnosisSubmit = async (event) => {
     event.preventDefault();
     try {
-      setSubmitting(true);
+      setDiagnosisSubmitting(true);
+      setDiagnosisError(null);
+      setDiagnosisSuccess(null);
       await createDiagnosis({
         patient_id: patientId,
-        doctor_id: getLoggedInUser()?.id,
+        doctor_id: Number(diagnosisForm.doctor_id),
         symptoms: diagnosisForm.symptoms,
         diagnosis: diagnosisForm.diagnosis,
       });
-      setDiagnosisForm({ symptoms: "", diagnosis: "" });
+      setDiagnosisForm({ doctor_id: "", symptoms: "", diagnosis: "" });
+      setDiagnosisSuccess("Diagnosis added successfully");
       await fetchData();
     } catch (err) {
-      setError(
+      setDiagnosisError(
         err.response?.data?.message ||
           "Failed to create diagnosis. Please try again.",
       );
     } finally {
-      setSubmitting(false);
+      setDiagnosisSubmitting(false);
     }
   };
 
@@ -316,7 +334,49 @@ function PatientProfilePage() {
           <h3 className="text-lg font-semibold text-slate-900">
             Add Prescription
           </h3>
+
+          {prescriptionSuccess && (
+            <div className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+              {prescriptionSuccess}
+            </div>
+          )}
+          {prescriptionError && (
+            <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              {prescriptionError}
+            </div>
+          )}
+
           <div className="mt-4 space-y-4">
+            <div>
+              <label
+                htmlFor="doctor_id"
+                className="mb-1.5 block text-sm font-semibold text-slate-700"
+              >
+                Doctor
+              </label>
+              <select
+                id="doctor_id"
+                name="doctor_id"
+                value={prescriptionForm.doctor_id}
+                onChange={(event) =>
+                  setPrescriptionForm((previous) => ({
+                    ...previous,
+                    doctor_id: event.target.value,
+                  }))
+                }
+                required
+                disabled={submitting}
+                className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="">Select doctor</option>
+                {doctors.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div>
               <label
                 htmlFor="medicines"
@@ -337,6 +397,7 @@ function PatientProfilePage() {
                 }
                 placeholder="medicines"
                 required
+                disabled={submitting}
                 className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
             </div>
@@ -361,6 +422,7 @@ function PatientProfilePage() {
                 }
                 placeholder="dosage"
                 required
+                disabled={submitting}
                 className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
             </div>
@@ -384,15 +446,24 @@ function PatientProfilePage() {
                 }
                 placeholder="notes"
                 rows={3}
+                disabled={submitting}
                 className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
             </div>
 
             <button
               type="submit"
-              className="inline-flex w-full justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+              disabled={submitting}
+              className={`inline-flex w-full justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition ${submitting ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-700"}`}
             >
-              Submit Prescription
+              {submitting ? (
+                <span className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  Adding...
+                </span>
+              ) : (
+                "Submit Prescription"
+              )}
             </button>
           </div>
         </form>
@@ -404,7 +475,49 @@ function PatientProfilePage() {
           <h3 className="text-lg font-semibold text-slate-900">
             Add Diagnosis
           </h3>
+
+          {diagnosisSuccess && (
+            <div className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+              {diagnosisSuccess}
+            </div>
+          )}
+          {diagnosisError && (
+            <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              {diagnosisError}
+            </div>
+          )}
+
           <div className="mt-4 space-y-4">
+            <div>
+              <label
+                htmlFor="diag_doctor_id"
+                className="mb-1.5 block text-sm font-semibold text-slate-700"
+              >
+                Doctor
+              </label>
+              <select
+                id="diag_doctor_id"
+                name="doctor_id"
+                value={diagnosisForm.doctor_id}
+                onChange={(event) =>
+                  setDiagnosisForm((previous) => ({
+                    ...previous,
+                    doctor_id: event.target.value,
+                  }))
+                }
+                required
+                disabled={diagnosisSubmitting}
+                className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="">Select doctor</option>
+                {doctors.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div>
               <label
                 htmlFor="symptoms"
@@ -425,6 +538,7 @@ function PatientProfilePage() {
                 placeholder="symptoms"
                 rows={3}
                 required
+                disabled={diagnosisSubmitting}
                 className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
             </div>
@@ -449,15 +563,24 @@ function PatientProfilePage() {
                 placeholder="diagnosis"
                 rows={3}
                 required
+                disabled={diagnosisSubmitting}
                 className="w-full rounded-xl border border-blue-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
             </div>
 
             <button
               type="submit"
-              className="inline-flex w-full justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+              disabled={diagnosisSubmitting}
+              className={`inline-flex w-full justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition ${diagnosisSubmitting ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-700"}`}
             >
-              Submit Diagnosis
+              {diagnosisSubmitting ? (
+                <span className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  Adding...
+                </span>
+              ) : (
+                "Submit Diagnosis"
+              )}
             </button>
           </div>
         </form>
